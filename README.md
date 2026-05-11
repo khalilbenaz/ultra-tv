@@ -1,7 +1,7 @@
 # Ultra TV
 
 <p align="center">
-  <img src="web/public/logo.png" alt="Ultra TV" width="160" />
+  <img src="docs/logo.png" alt="Ultra TV" width="160" />
 </p>
 
 <p align="center">
@@ -59,10 +59,10 @@ It speaks **Xtream Codes**, **M3U/M3U8** and **Stalker Portal**. It plays **HLS,
 </p>
 
 - **Android / Android TV / Google TV** → [latest APK](https://github.com/khalilbenaz/ultra-tv/releases/latest/download/UltraTV-debug.apk)
+
+  <a href="https://www.aftvnews.com/downloader/"><img src="docs/downloader-logo.png" alt="Downloader app" width="420" /></a>
+
   - **Easiest on a TV box** — install the free [**Downloader**](https://www.aftvnews.com/downloader/) app from the Play Store / Amazon Appstore, open it and type the short code **`5248504`** to fetch the APK directly.
-
-    <a href="https://www.aftvnews.com/downloader/"><img src="docs/downloader-logo.png" alt="Downloader app" width="320" /></a>
-
   - Or sideload over USB / network: `adb install UltraTV-debug.apk`
   - Or copy the APK to a USB stick / cloud drive and open it with any file manager on the TV
 - **Desktop** → build via `electron/` (macOS `.dmg`, Windows `.exe`, Linux `.AppImage` / `.deb`)
