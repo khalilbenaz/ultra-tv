@@ -1,18 +1,8 @@
 package com.ultratv.tv.nativeapp
 
 import android.os.Bundle
-import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.lifecycle.lifecycleScope
-import com.ultratv.tv.nativeapp.data.prefs.UserPreferencesStore
-import com.ultratv.tv.nativeapp.data.repo.HistoryRepository
-import com.ultratv.tv.nativeapp.data.repo.PlaybackContext
-import com.ultratv.tv.nativeapp.data.repo.ProviderRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +11,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,6 +28,10 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import com.ultratv.tv.nativeapp.data.prefs.SidebarPosition
+import com.ultratv.tv.nativeapp.data.prefs.UserPreferencesStore
+import com.ultratv.tv.nativeapp.data.repo.HistoryRepository
+import com.ultratv.tv.nativeapp.data.repo.PlaybackContext
+import com.ultratv.tv.nativeapp.data.repo.ProviderRepository
 import com.ultratv.tv.nativeapp.nav.Routes
 import com.ultratv.tv.nativeapp.ui.AppViewModel
 import com.ultratv.tv.nativeapp.ui.categories.CategoriesScreen
@@ -55,6 +51,21 @@ import com.ultratv.tv.nativeapp.ui.series.SeriesScreen
 import com.ultratv.tv.nativeapp.ui.settings.SettingsScreen
 import com.ultratv.tv.nativeapp.ui.theme.UltraTvTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+/**
+ * Carries a one-shot "open this URL+title in the player as soon as the
+ * Composition is up" intent. Set by [MainActivity.kickoffStartupTasks] when
+ * `autoPlayLastOnLaunch` is enabled; consumed by [UltraTvAppRoot] once.
+ */
+object StartupNav {
+    data class Pending(val url: String, val title: String)
+    val pending = MutableStateFlow<Pending?>(null)
+}
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -72,22 +83,30 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Runs once when the activity is created. Two preference-gated tasks:
-     *  - Auto-sync every provider if the user opted in (catalogs can drift).
-     *  - Open the player on the most recent history entry if the user opted in.
+     * Best-effort startup tasks. Both are gated by user prefs.
      *
-     * Both are best-effort; failures are silent (we don't want a sync timeout
-     * to stop the user reaching the UI).
+     *  1. Auto-sync providers if `autoSyncOnLaunch` is on AND the configured
+     *     [UserPrefs.syncIntervalHours] interval has elapsed since the last
+     *     successful sync. Interval 0 means "every launch".
+     *  2. Auto-play the most recently watched item by emitting a Pending
+     *     entry on [StartupNav.pending], which the NavGraph picks up.
      */
     private fun kickoffStartupTasks() {
         lifecycleScope.launch(Dispatchers.IO) {
             val prefs = prefsStore.flow.first()
+
             if (prefs.autoSyncOnLaunch) {
-                runCatching {
-                    val all = providerRepo.observeProviders().first()
-                    all.forEach { p -> runCatching { providerRepo.syncAll(p.id) } }
+                val intervalMs = prefs.syncIntervalHours * 3600L * 1000L
+                val due = intervalMs == 0L || (System.currentTimeMillis() - prefs.lastSyncAtMs) >= intervalMs
+                if (due) {
+                    runCatching {
+                        val all = providerRepo.observeProviders().first()
+                        all.forEach { p -> runCatching { providerRepo.syncAll(p.id) } }
+                        prefsStore.setLastSyncAt(System.currentTimeMillis())
+                    }
                 }
             }
+
             if (prefs.autoPlayLastOnLaunch) {
                 val firstProvider = providerRepo.observeProviders().first().firstOrNull()
                 if (firstProvider != null) {
@@ -98,10 +117,7 @@ class MainActivity : ComponentActivity() {
                             title = last.title, poster = last.poster, streamUrl = last.streamUrl,
                             parentRemoteId = last.parentRemoteId,
                         ))
-                        // Re-launch ourselves into the player route via a deep-link-like extra.
-                        // Simpler approach: navigate via a remembered NavController in Root — defer:
-                        // for the first cut we just preload PlaybackContext so the user can press
-                        // any "Resume" button. True auto-launch player TODO.
+                        StartupNav.pending.value = StartupNav.Pending(last.streamUrl, last.title)
                     }
                 }
             }
@@ -120,6 +136,16 @@ private fun Root(vm: AppViewModel = hiltViewModel()) {
 @Composable
 private fun UltraTvAppRoot(sidebarPosition: SidebarPosition) {
     val nav = rememberNavController()
+
+    // One-shot: as soon as we have a NavController, consume any pending
+    // auto-play request set during startup.
+    val pending by StartupNav.pending.collectAsState()
+    LaunchedEffect(pending) {
+        val p = pending ?: return@LaunchedEffect
+        nav.navigate(Routes.player(p.url, p.title))
+        StartupNav.pending.value = null
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         colors = SurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.background),

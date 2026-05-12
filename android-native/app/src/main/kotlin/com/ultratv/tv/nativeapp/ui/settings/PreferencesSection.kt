@@ -58,7 +58,20 @@ fun PreferencesSection(vm: AppViewModel = hiltViewModel()) {
         SwitchRow("Auto-play next episode", "Automatically play S0xE0y+1 when an episode ends.", p.autoPlayNextEpisode) { vm.setAutoPlayNext(it) }
         SwitchRow("Launch at TV boot", "Open Ultra TV automatically when the box finishes booting.", p.launchAtBoot) { vm.setLaunchAtBoot(it) }
         SwitchRow("Auto-play last watched on launch", "Resume the last channel / movie / episode when the app starts.", p.autoPlayLastOnLaunch) { vm.setAutoPlayLast(it) }
+
+        PrefRow(label = "Refresh playlists") {
+            IntervalChip("Every launch", 0, p.syncIntervalHours, vm::setSyncInterval)
+            IntervalChip("Every 6h", 6, p.syncIntervalHours, vm::setSyncInterval)
+            IntervalChip("Every 12h", 12, p.syncIntervalHours, vm::setSyncInterval)
+            IntervalChip("Every 24h", 24, p.syncIntervalHours, vm::setSyncInterval)
+        }
     }
+}
+
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+@Composable
+private fun IntervalChip(label: String, value: Int, current: Int, onSet: (Int) -> Unit) {
+    ChoiceChip(label, on = value == current) { onSet(value) }
 }
 
 @Composable

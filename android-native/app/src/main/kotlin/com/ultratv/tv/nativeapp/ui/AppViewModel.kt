@@ -33,4 +33,5 @@ class AppViewModel @Inject constructor(
     fun setAutoPlayNext(v: Boolean) = viewModelScope.launch { store.setAutoPlayNext(v) }
     fun setLaunchAtBoot(v: Boolean) = viewModelScope.launch { store.setLaunchAtBoot(v) }
     fun setAutoPlayLast(v: Boolean) = viewModelScope.launch { store.setAutoPlayLast(v) }
+    fun setSyncInterval(hours: Int) = viewModelScope.launch { store.setSyncInterval(hours) }
 }

@@ -3,6 +3,8 @@ package com.ultratv.tv.nativeapp.data.prefs
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,6 +32,11 @@ data class UserPrefs(
     val launchAtBoot: Boolean = false,
     /** On app start, automatically open the most recently watched item. */
     val autoPlayLastOnLaunch: Boolean = false,
+    /** Minimum hours between auto-syncs; 0 = sync on every launch. Only used
+     *  when [autoSyncOnLaunch] is true. */
+    val syncIntervalHours: Int = 0,
+    /** Last successful auto-sync timestamp (ms). Internal; not user-visible. */
+    val lastSyncAtMs: Long = 0L,
 )
 
 @Singleton
@@ -45,6 +52,8 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val autoPlayNext = booleanPreferencesKey("auto_play_next")
         val launchAtBoot = booleanPreferencesKey("launch_at_boot")
         val autoPlayLast = booleanPreferencesKey("auto_play_last_on_launch")
+        val syncInterval = intPreferencesKey("sync_interval_hours")
+        val lastSyncAt = longPreferencesKey("last_sync_at_ms")
     }
 
     val flow: Flow<UserPrefs> = ctx.userPrefsDs.data.map { p ->
@@ -59,6 +68,8 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
             autoPlayNextEpisode = p[Keys.autoPlayNext] ?: true,
             launchAtBoot = p[Keys.launchAtBoot] ?: false,
             autoPlayLastOnLaunch = p[Keys.autoPlayLast] ?: false,
+            syncIntervalHours = p[Keys.syncInterval] ?: 0,
+            lastSyncAtMs = p[Keys.lastSyncAt] ?: 0L,
         )
     }
 
@@ -72,6 +83,8 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
     suspend fun setAutoPlayNext(v: Boolean) = update { it[Keys.autoPlayNext] = v }
     suspend fun setLaunchAtBoot(v: Boolean) = update { it[Keys.launchAtBoot] = v }
     suspend fun setAutoPlayLast(v: Boolean) = update { it[Keys.autoPlayLast] = v }
+    suspend fun setSyncInterval(hours: Int) = update { it[Keys.syncInterval] = hours }
+    suspend fun setLastSyncAt(ms: Long) = update { it[Keys.lastSyncAt] = ms }
 
     private suspend inline fun update(crossinline block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         ctx.userPrefsDs.edit { block(it) }

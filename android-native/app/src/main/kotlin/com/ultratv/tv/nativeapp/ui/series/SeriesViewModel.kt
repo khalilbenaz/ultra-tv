@@ -66,7 +66,33 @@ class SeriesListViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun selectCategory(remoteId: String?) { _sel.value = remoteId }
+
+    val rails: StateFlow<List<SeriesRail>> = combine(
+        providers, hiddenStore.hidden,
+    ) { ps, hidden -> ps to hidden }
+        .flatMapLatest { (ps, hidden) ->
+            val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+            combine(catalog.categories(pid, "SERIES"), catalog.seriesList(pid)) { cats, series ->
+                val visibleCats = cats.filter { hiddenStore.keyFor("SERIES", pid, it.remoteId) !in hidden }
+                val groups = series.groupBy { it.categoryId }
+                val out = mutableListOf<SeriesRail>()
+                visibleCats.forEach { c ->
+                    val items = groups[c.remoteId].orEmpty().take(25)
+                    if (items.isNotEmpty()) out += SeriesRail(c, items)
+                }
+                val others = series.filter { it.categoryId == null || it.categoryId !in visibleCats.map { c -> c.remoteId }.toSet() }
+                if (others.isNotEmpty()) out += SeriesRail(null, others.take(25))
+                out
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val featured: StateFlow<SeriesEntity?> = items
+        .map { list -> list.maxByOrNull { (it.year ?: 0) * 100L + (it.name.length % 100) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
+
+data class SeriesRail(val category: CategoryEntity?, val items: List<SeriesEntity>)
 
 @HiltViewModel
 class SeriesDetailViewModel @Inject constructor(
