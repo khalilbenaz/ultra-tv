@@ -31,4 +31,6 @@ class AppViewModel @Inject constructor(
     fun setHideAdult(v: Boolean) = viewModelScope.launch { store.setHideAdult(v) }
     fun setResumePlayback(v: Boolean) = viewModelScope.launch { store.setResumePlayback(v) }
     fun setAutoPlayNext(v: Boolean) = viewModelScope.launch { store.setAutoPlayNext(v) }
+    fun setLaunchAtBoot(v: Boolean) = viewModelScope.launch { store.setLaunchAtBoot(v) }
+    fun setAutoPlayLast(v: Boolean) = viewModelScope.launch { store.setAutoPlayLast(v) }
 }

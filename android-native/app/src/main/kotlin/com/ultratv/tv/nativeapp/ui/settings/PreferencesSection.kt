@@ -56,6 +56,8 @@ fun PreferencesSection(vm: AppViewModel = hiltViewModel()) {
         SwitchRow("Hide adult categories", "Completely remove adult categories from lists (beyond PIN lock).", p.hideAdultCategories) { vm.setHideAdult(it) }
         SwitchRow("Resume playback", "Reopen movies/episodes at the position you left them.", p.resumePlayback) { vm.setResumePlayback(it) }
         SwitchRow("Auto-play next episode", "Automatically play S0xE0y+1 when an episode ends.", p.autoPlayNextEpisode) { vm.setAutoPlayNext(it) }
+        SwitchRow("Launch at TV boot", "Open Ultra TV automatically when the box finishes booting.", p.launchAtBoot) { vm.setLaunchAtBoot(it) }
+        SwitchRow("Auto-play last watched on launch", "Resume the last channel / movie / episode when the app starts.", p.autoPlayLastOnLaunch) { vm.setAutoPlayLast(it) }
     }
 }
 

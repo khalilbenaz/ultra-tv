@@ -27,6 +27,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ultratv.tv.nativeapp.data.db.MovieEntity
 import com.ultratv.tv.nativeapp.data.repo.CatalogRepository
+import com.ultratv.tv.nativeapp.data.repo.PlaybackContext
 import coil.compose.AsyncImage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,10 +42,17 @@ import javax.inject.Inject
 @HiltViewModel
 class MovieDetailViewModel @Inject constructor(
     private val catalog: CatalogRepository,
+    private val playback: PlaybackContext,
 ) : ViewModel() {
     private val _m = MutableStateFlow<MovieEntity?>(null)
     val movie: StateFlow<MovieEntity?> = _m.asStateFlow()
     fun load(id: Long) { viewModelScope.launch { _m.value = catalog.movieById(id) } }
+    fun registerPlay(m: MovieEntity) {
+        playback.set(PlaybackContext.Item(
+            providerId = m.providerId, kind = "MOVIE", remoteId = m.remoteId,
+            title = m.name, poster = m.poster, streamUrl = m.streamUrl,
+        ))
+    }
 }
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
@@ -82,7 +90,7 @@ fun MovieDetailScreen(
             }
             movie.plot?.let { Text(it, color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { onPlay(movie.streamUrl, movie.name) }) { Text("Play", fontSize = 16.sp) }
+                Button(onClick = { vm.registerPlay(movie); onPlay(movie.streamUrl, movie.name) }) { Text("Play", fontSize = 16.sp) }
                 com.ultratv.tv.nativeapp.ui.common.FavoriteButton(kind = "MOVIE", remoteId = movie.remoteId)
             }
         }

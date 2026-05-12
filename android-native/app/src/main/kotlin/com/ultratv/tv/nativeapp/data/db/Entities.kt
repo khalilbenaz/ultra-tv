@@ -100,6 +100,24 @@ data class FavoriteEntity(
 )
 
 @Entity(
+    tableName = "watch_history",
+    primaryKeys = ["providerId", "kind", "remoteId"],
+)
+data class WatchHistoryEntity(
+    val providerId: Long,
+    val kind: String,           // "LIVE", "MOVIE", "EPISODE"
+    val remoteId: String,
+    val title: String,
+    val poster: String?,
+    val streamUrl: String,
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
+    val watchedAt: Long = System.currentTimeMillis(),
+    // For episodes: parent series id so we can group "continue watching this show".
+    val parentRemoteId: String? = null,
+)
+
+@Entity(
     tableName = "epg",
     indices = [Index("channelId"), Index(value = ["channelId", "startMs"])],
 )

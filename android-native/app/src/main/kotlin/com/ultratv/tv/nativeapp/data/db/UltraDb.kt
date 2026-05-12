@@ -13,8 +13,9 @@ import androidx.room.RoomDatabase
         CategoryEntity::class,
         FavoriteEntity::class,
         EpgEntity::class,
+        WatchHistoryEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class UltraDb : RoomDatabase() {
@@ -26,4 +27,5 @@ abstract class UltraDb : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun favoriteDao(): FavoriteDao
     abstract fun epgDao(): EpgDao
+    abstract fun watchHistoryDao(): WatchHistoryDao
 }

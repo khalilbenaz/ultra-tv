@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ultratv.tv.nativeapp.data.db.ChannelEntity
 import com.ultratv.tv.nativeapp.data.prefs.HiddenCategoriesStore
 import com.ultratv.tv.nativeapp.data.repo.CatalogRepository
+import com.ultratv.tv.nativeapp.data.repo.PlaybackContext
 import com.ultratv.tv.nativeapp.data.repo.ProviderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,6 +27,7 @@ class LiveViewModel @Inject constructor(
     private val provider: ProviderRepository,
     catalog: CatalogRepository,
     private val hiddenStore: HiddenCategoriesStore,
+    private val playback: PlaybackContext,
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
@@ -54,7 +56,18 @@ class LiveViewModel @Inject constructor(
     fun setQuery(q: String) { _query.value = q }
 
     fun resolveAndPlay(channel: ChannelEntity, onReady: (url: String, title: String) -> Unit) {
+        fun register(url: String) {
+            playback.set(PlaybackContext.Item(
+                providerId = channel.providerId,
+                kind = "LIVE",
+                remoteId = channel.remoteId,
+                title = channel.name,
+                poster = channel.logo,
+                streamUrl = url,
+            ))
+        }
         if (!channel.streamUrl.startsWith("stalker://")) {
+            register(channel.streamUrl)
             onReady(channel.streamUrl, channel.name)
             return
         }
@@ -62,6 +75,7 @@ class LiveViewModel @Inject constructor(
             _resolving.value = true
             try {
                 val resolved = provider.resolvePlayUrl(channel.id, channel.streamUrl)
+                register(resolved)
                 onReady(resolved, channel.name)
             } finally {
                 _resolving.value = false

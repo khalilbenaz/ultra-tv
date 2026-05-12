@@ -137,6 +137,27 @@ interface FavoriteDao {
 }
 
 @Dao
+interface WatchHistoryDao {
+    @Query("SELECT * FROM watch_history WHERE providerId = :pid ORDER BY watchedAt DESC LIMIT :limit")
+    fun observeRecent(pid: Long, limit: Int = 30): Flow<List<WatchHistoryEntity>>
+
+    @Query("SELECT * FROM watch_history WHERE providerId = :pid AND kind = :kind ORDER BY watchedAt DESC LIMIT :limit")
+    fun observeRecentByKind(pid: Long, kind: String, limit: Int = 30): Flow<List<WatchHistoryEntity>>
+
+    @Query("SELECT * FROM watch_history WHERE providerId = :pid AND positionMs > 0 AND (durationMs = 0 OR positionMs < durationMs - 60000) ORDER BY watchedAt DESC LIMIT :limit")
+    fun observeContinueWatching(pid: Long, limit: Int = 20): Flow<List<WatchHistoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(h: WatchHistoryEntity)
+
+    @Query("DELETE FROM watch_history WHERE providerId = :pid AND kind = :kind AND remoteId = :rid")
+    suspend fun remove(pid: Long, kind: String, rid: String)
+
+    @Query("DELETE FROM watch_history WHERE providerId = :pid")
+    suspend fun clearForProvider(pid: Long)
+}
+
+@Dao
 interface EpgDao {
     @Query("SELECT * FROM epg WHERE channelId = :cid AND endMs >= :nowMs ORDER BY startMs LIMIT 20")
     fun observeUpcoming(cid: Long, nowMs: Long): Flow<List<EpgEntity>>

@@ -26,6 +26,10 @@ data class UserPrefs(
     val hideAdultCategories: Boolean = false,
     val resumePlayback: Boolean = true,
     val autoPlayNextEpisode: Boolean = true,
+    /** Launch the app automatically once Android TV finishes booting. */
+    val launchAtBoot: Boolean = false,
+    /** On app start, automatically open the most recently watched item. */
+    val autoPlayLastOnLaunch: Boolean = false,
 )
 
 @Singleton
@@ -39,6 +43,8 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val hideAdult = booleanPreferencesKey("hide_adult")
         val resume = booleanPreferencesKey("resume_playback")
         val autoPlayNext = booleanPreferencesKey("auto_play_next")
+        val launchAtBoot = booleanPreferencesKey("launch_at_boot")
+        val autoPlayLast = booleanPreferencesKey("auto_play_last_on_launch")
     }
 
     val flow: Flow<UserPrefs> = ctx.userPrefsDs.data.map { p ->
@@ -51,6 +57,8 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
             hideAdultCategories = p[Keys.hideAdult] ?: false,
             resumePlayback = p[Keys.resume] ?: true,
             autoPlayNextEpisode = p[Keys.autoPlayNext] ?: true,
+            launchAtBoot = p[Keys.launchAtBoot] ?: false,
+            autoPlayLastOnLaunch = p[Keys.autoPlayLast] ?: false,
         )
     }
 
@@ -62,6 +70,8 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
     suspend fun setHideAdult(v: Boolean) = update { it[Keys.hideAdult] = v }
     suspend fun setResumePlayback(v: Boolean) = update { it[Keys.resume] = v }
     suspend fun setAutoPlayNext(v: Boolean) = update { it[Keys.autoPlayNext] = v }
+    suspend fun setLaunchAtBoot(v: Boolean) = update { it[Keys.launchAtBoot] = v }
+    suspend fun setAutoPlayLast(v: Boolean) = update { it[Keys.autoPlayLast] = v }
 
     private suspend inline fun update(crossinline block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         ctx.userPrefsDs.edit { block(it) }

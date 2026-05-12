@@ -33,6 +33,7 @@ object DatabaseModule {
     @Provides fun provideCategoryDao(db: UltraDb): CategoryDao = db.categoryDao()
     @Provides fun provideFavoriteDao(db: UltraDb): com.ultratv.tv.nativeapp.data.db.FavoriteDao = db.favoriteDao()
     @Provides fun provideEpgDao(db: UltraDb): com.ultratv.tv.nativeapp.data.db.EpgDao = db.epgDao()
+    @Provides fun provideWatchHistoryDao(db: UltraDb): com.ultratv.tv.nativeapp.data.db.WatchHistoryDao = db.watchHistoryDao()
 }
 
 @Module

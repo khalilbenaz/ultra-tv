@@ -1,8 +1,18 @@
 package com.ultratv.tv.nativeapp
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
+import com.ultratv.tv.nativeapp.data.prefs.UserPreferencesStore
+import com.ultratv.tv.nativeapp.data.repo.HistoryRepository
+import com.ultratv.tv.nativeapp.data.repo.PlaybackContext
+import com.ultratv.tv.nativeapp.data.repo.ProviderRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,10 +58,54 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var prefsStore: UserPreferencesStore
+    @Inject lateinit var providerRepo: ProviderRepository
+    @Inject lateinit var historyRepo: HistoryRepository
+    @Inject lateinit var playback: PlaybackContext
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent { Root() }
+        kickoffStartupTasks()
+    }
+
+    /**
+     * Runs once when the activity is created. Two preference-gated tasks:
+     *  - Auto-sync every provider if the user opted in (catalogs can drift).
+     *  - Open the player on the most recent history entry if the user opted in.
+     *
+     * Both are best-effort; failures are silent (we don't want a sync timeout
+     * to stop the user reaching the UI).
+     */
+    private fun kickoffStartupTasks() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val prefs = prefsStore.flow.first()
+            if (prefs.autoSyncOnLaunch) {
+                runCatching {
+                    val all = providerRepo.observeProviders().first()
+                    all.forEach { p -> runCatching { providerRepo.syncAll(p.id) } }
+                }
+            }
+            if (prefs.autoPlayLastOnLaunch) {
+                val firstProvider = providerRepo.observeProviders().first().firstOrNull()
+                if (firstProvider != null) {
+                    val last = historyRepo.recent(firstProvider.id, 1).first().firstOrNull()
+                    if (last != null) {
+                        playback.set(PlaybackContext.Item(
+                            providerId = last.providerId, kind = last.kind, remoteId = last.remoteId,
+                            title = last.title, poster = last.poster, streamUrl = last.streamUrl,
+                            parentRemoteId = last.parentRemoteId,
+                        ))
+                        // Re-launch ourselves into the player route via a deep-link-like extra.
+                        // Simpler approach: navigate via a remembered NavController in Root — defer:
+                        // for the first cut we just preload PlaybackContext so the user can press
+                        // any "Resume" button. True auto-launch player TODO.
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -104,6 +158,9 @@ private fun NavGraph(nav: androidx.navigation.NavHostController) {
                 onGoMovies = { nav.navigate(Routes.MOVIES) },
                 onGoSeries = { nav.navigate(Routes.SERIES) },
                 onGoSettings = { nav.navigate(Routes.SETTINGS) },
+                onPlay = { url, title -> nav.navigate(Routes.player(url, title)) },
+                onOpenMovie = { id -> nav.navigate(Routes.movieDetail(id)) },
+                onOpenSeries = { id -> nav.navigate(Routes.seriesDetail(id)) },
             )
         }
         composable(Routes.LIVE) {

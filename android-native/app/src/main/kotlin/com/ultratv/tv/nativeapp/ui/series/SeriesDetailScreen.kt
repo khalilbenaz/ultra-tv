@@ -78,6 +78,7 @@ fun SeriesDetailScreen(
                 items(eps, key = { it.id }) { ep ->
                     Card(
                         onClick = {
+                            vm.registerPlay(series.name, series.remoteId, series.providerId, ep)
                             val tag = "S${ep.season.toString().padStart(2, '0')}E${ep.episode.toString().padStart(2, '0')}"
                             onPlayEpisode(ep.streamUrl, "${series.name} – $tag · ${ep.title}")
                         },

@@ -7,6 +7,7 @@ import com.ultratv.tv.nativeapp.data.db.EpisodeEntity
 import com.ultratv.tv.nativeapp.data.db.SeriesEntity
 import com.ultratv.tv.nativeapp.data.prefs.HiddenCategoriesStore
 import com.ultratv.tv.nativeapp.data.repo.CatalogRepository
+import com.ultratv.tv.nativeapp.data.repo.PlaybackContext
 import com.ultratv.tv.nativeapp.data.repo.ProviderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -70,7 +71,21 @@ class SeriesListViewModel @Inject constructor(
 @HiltViewModel
 class SeriesDetailViewModel @Inject constructor(
     private val catalog: CatalogRepository,
+    private val playback: PlaybackContext,
 ) : ViewModel() {
+
+    fun registerPlay(seriesName: String, seriesRemoteId: String, providerId: Long, episode: EpisodeEntity) {
+        playback.set(PlaybackContext.Item(
+            providerId = providerId,
+            kind = "EPISODE",
+            remoteId = episode.remoteId,
+            title = "$seriesName · S${"%02d".format(episode.season)}E${"%02d".format(episode.episode)} · ${episode.title}",
+            poster = null,
+            streamUrl = episode.streamUrl,
+            parentRemoteId = seriesRemoteId,
+        ))
+    }
+
     private val _series = MutableStateFlow<SeriesEntity?>(null)
     val series: StateFlow<SeriesEntity?> = _series.asStateFlow()
 
