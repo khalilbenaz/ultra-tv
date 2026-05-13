@@ -41,7 +41,7 @@ class MoviesViewModel @Inject constructor(
         providers, hiddenStore.hidden,
     ) { ps, hidden -> ps to hidden }
         .flatMapLatest { (ps, hidden) ->
-            val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+            val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
             catalog.categories(pid, "MOVIE").map { list ->
                 list.filter { hiddenStore.keyFor("MOVIE", pid, it.remoteId) !in hidden }
             }
@@ -56,7 +56,7 @@ class MoviesViewModel @Inject constructor(
         providers, _selectedCategory, hiddenStore.hidden,
     ) { ps, cat, hidden -> Triple(ps, cat, hidden) }
         .flatMapLatest { (ps, cat, hidden) ->
-            val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+            val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
             catalog.movies(pid).map { list ->
                 list.filter { m ->
                     val cid = m.categoryId
@@ -76,7 +76,7 @@ class MoviesViewModel @Inject constructor(
         providers, hiddenStore.hidden,
     ) { ps, hidden -> ps to hidden }
         .flatMapLatest { (ps, hidden) ->
-            val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+            val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
             combine(catalog.categories(pid, "MOVIE"), catalog.movies(pid)) { cats, movs ->
                 val visibleCats = cats.filter { hiddenStore.keyFor("MOVIE", pid, it.remoteId) !in hidden }
                 val groups = movs.groupBy { it.categoryId }

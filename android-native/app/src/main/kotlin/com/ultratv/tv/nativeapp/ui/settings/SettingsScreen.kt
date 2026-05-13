@@ -161,8 +161,24 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("${p.name}  ·  ${p.kind}", fontSize = 15.sp, color = MaterialTheme.colorScheme.onBackground)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (p.active) {
+                                    Text(
+                                        "★ Default",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier
+                                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                                Text("${p.name}  ·  ${p.kind}", fontSize = 15.sp, color = MaterialTheme.colorScheme.onBackground)
+                            }
                             Text(p.baseUrl, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (!p.active) {
+                            Button(onClick = { vm.setDefault(p.id) }, enabled = !syncing) { Text("Set default") }
                         }
                         Button(onClick = { vm.resync(p.id) }, enabled = !syncing) { Text("Re-sync") }
                         Button(

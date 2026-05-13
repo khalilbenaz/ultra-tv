@@ -26,6 +26,12 @@ interface ProviderDao {
 
     @Query("DELETE FROM provider WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("UPDATE provider SET active = 0")
+    suspend fun deactivateAll()
+
+    @Query("UPDATE provider SET active = 1 WHERE id = :id")
+    suspend fun activate(id: Long)
 }
 
 @Dao

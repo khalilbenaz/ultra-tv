@@ -53,7 +53,7 @@ class LiveViewModel @Inject constructor(
     val categories: StateFlow<List<CategoryEntity>> =
         combine(providers, hiddenStore.hidden) { ps, hidden -> ps to hidden }
             .flatMapLatest { (ps, hidden) ->
-                val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+                val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
                 catalog.categories(pid, "LIVE").map { list ->
                     list.filter { hiddenStore.keyFor("LIVE", pid, it.remoteId) !in hidden }
                 }

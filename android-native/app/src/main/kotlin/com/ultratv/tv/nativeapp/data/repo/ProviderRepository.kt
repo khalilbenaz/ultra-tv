@@ -54,7 +54,7 @@ class ProviderRepository @Inject constructor(
                 baseUrl = url,
                 username = "",
                 password = "",
-                active = true,
+                active = false,    // explicit default is set in Settings; see setDefault
             ),
         )
         return pid
@@ -73,7 +73,7 @@ class ProviderRepository @Inject constructor(
                 baseUrl = label,        // displayed-only; we never fetch this
                 username = "",
                 password = "",
-                active = true,
+                active = false,    // explicit default is set in Settings; see setDefault
             ),
         )
         val res = m3u.parse(text, pid)
@@ -123,7 +123,7 @@ class ProviderRepository @Inject constructor(
                 baseUrl = portalUrl.trimEnd('/'),
                 username = mac.trim(),         // MAC address
                 password = "",
-                active = true,
+                active = false,    // explicit default is set in Settings; see setDefault
             ),
         )
     }
@@ -184,9 +184,20 @@ class ProviderRepository @Inject constructor(
                 baseUrl = normalised,
                 username = username,
                 password = password,
-                active = true,
+                active = false,    // explicit default is set in Settings; see setDefault
             ),
         )
+    }
+
+    /**
+     * Marks one provider as the default and deactivates the others. Every
+     * screen that picks "the current provider" uses `firstOrNull { it.active }`,
+     * so setting default = id atomically switches the whole app to that
+     * provider's catalog.
+     */
+    suspend fun setDefault(id: Long) {
+        providerDao.deactivateAll()
+        providerDao.activate(id)
     }
 
     suspend fun delete(id: Long) {

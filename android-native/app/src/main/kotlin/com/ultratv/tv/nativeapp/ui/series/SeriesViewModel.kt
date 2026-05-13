@@ -42,7 +42,7 @@ class SeriesListViewModel @Inject constructor(
         providers, hiddenStore.hidden,
     ) { ps, hidden -> ps to hidden }
         .flatMapLatest { (ps, hidden) ->
-            val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+            val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
             catalog.categories(pid, "SERIES").map { list ->
                 list.filter { hiddenStore.keyFor("SERIES", pid, it.remoteId) !in hidden }
             }
@@ -53,7 +53,7 @@ class SeriesListViewModel @Inject constructor(
         providers, _sel, hiddenStore.hidden,
     ) { ps, cat, hidden -> Triple(ps, cat, hidden) }
         .flatMapLatest { (ps, cat, hidden) ->
-            val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+            val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
             val all: Flow<List<SeriesEntity>> = catalog.seriesList(pid)
             all.map { list ->
                 list.filter { s ->
@@ -71,7 +71,7 @@ class SeriesListViewModel @Inject constructor(
         providers, hiddenStore.hidden,
     ) { ps, hidden -> ps to hidden }
         .flatMapLatest { (ps, hidden) ->
-            val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+            val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
             combine(catalog.categories(pid, "SERIES"), catalog.seriesList(pid)) { cats, series ->
                 val visibleCats = cats.filter { hiddenStore.keyFor("SERIES", pid, it.remoteId) !in hidden }
                 val groups = series.groupBy { it.categoryId }

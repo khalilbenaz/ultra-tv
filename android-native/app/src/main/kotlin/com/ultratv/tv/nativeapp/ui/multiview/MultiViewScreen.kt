@@ -58,7 +58,7 @@ class MultiViewViewModel @Inject constructor(
 ) : ViewModel() {
     val channels: StateFlow<List<ChannelEntity>> = providerRepo.observeProviders()
         .flatMapLatest { ps ->
-            val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+            val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
             catalog.channels(pid)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

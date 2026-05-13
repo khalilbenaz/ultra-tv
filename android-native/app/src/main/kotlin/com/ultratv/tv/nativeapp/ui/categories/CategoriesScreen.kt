@@ -70,7 +70,7 @@ class CategoriesViewModel @Inject constructor(
     val categories: StateFlow<List<CategoryEntity>> =
         combine(providerRepo.observeProviders(), _kind) { ps, k -> ps to k }
             .flatMapLatest { (ps, k) ->
-                val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+                val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
                 catalog.categories(pid, k)
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

@@ -46,7 +46,7 @@ class FavoritesViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val movies: StateFlow<List<MovieEntity>> = providers.flatMapLatest { ps ->
-        val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+        val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
         catalog.favoritesByKind(pid, "MOVIE").flatMapLatest { favs ->
             catalog.movies(pid).map { list ->
                 val ids = favs.map { it.remoteId }.toSet()
@@ -56,7 +56,7 @@ class FavoritesViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val series: StateFlow<List<SeriesEntity>> = providers.flatMapLatest { ps ->
-        val pid = ps.firstOrNull()?.id ?: return@flatMapLatest flowOf(emptyList())
+        val pid = (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id ?: return@flatMapLatest flowOf(emptyList())
         catalog.favoritesByKind(pid, "SERIES").flatMapLatest { favs ->
             catalog.seriesList(pid).map { list ->
                 val ids = favs.map { it.remoteId }.toSet()

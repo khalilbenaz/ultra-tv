@@ -40,7 +40,7 @@ class HomeViewModel @Inject constructor(
     val providers: StateFlow<List<ProviderEntity>> = provider.observeProviders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val pid = providers.map { it.firstOrNull()?.id }
+    private val pid = providers.map { ps -> (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id }
 
     val continueWatching: StateFlow<List<WatchHistoryEntity>> = pid
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else history.continueWatching(id) }
