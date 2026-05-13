@@ -68,6 +68,7 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
     val nowNext by vm.nowNext.collectAsState()
     // Channel awaiting PIN unlock; non-null while the dialog is up.
     var pinPrompt by remember { mutableStateOf<com.ultratv.tv.nativeapp.data.db.ChannelEntity?>(null) }
+    val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
 
     Row(Modifier.fillMaxSize()) {
         // ---- Left pane: categories ----
@@ -79,7 +80,7 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                "Categories",
+                S.categories,
                 color = MaterialTheme.colorScheme.primary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
@@ -118,11 +119,11 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
                 .padding(start = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val title = if (selected == CATEGORY_ALL) "All channels"
+            val title = if (selected == CATEGORY_ALL) S.liveAllChannels
             else prettyCategoryName(cats.firstOrNull { it.remoteId == selected }?.name ?: "")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Text("${chans.size} channels", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(S.liveChannelsCountTemplate.format(chans.size), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             val listState = rememberLazyListState()
@@ -132,7 +133,7 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
 
             if (chans.isEmpty()) {
                 Text(
-                    "No channels in this category.",
+                    S.liveNoChannelsInCategory,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {

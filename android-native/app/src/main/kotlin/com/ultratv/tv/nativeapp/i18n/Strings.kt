@@ -207,6 +207,13 @@ data class Strings(
     val playerAudioTemplate: String,
     val playerSubtitlesTemplate: String,
 
+    // Live + browse
+    val liveAllChannels: String,
+    val liveChannelsCountTemplate: String,
+    val liveNoChannelsInCategory: String,
+    val railOther: String,
+    val open: String,
+
     // Settings sections
     val settingsTitle: String,
     val settingsDisplay: String,
@@ -437,6 +444,12 @@ private val EN = Strings(
     playerAudioTemplate = "Audio (%1\$d)",
     playerSubtitlesTemplate = "Subtitles (%1\$d)",
 
+    liveAllChannels = "All channels",
+    liveChannelsCountTemplate = "%1\$d channels",
+    liveNoChannelsInCategory = "No channels in this category.",
+    railOther = "Other",
+    open = "Open",
+
     settingsTitle = "Settings", settingsDisplay = "Display & playback",
     settingsParental = "Parental controls", settingsBackup = "Backup & restore",
     settingsLanguage = "Language", settingsTheme = "Theme",
@@ -638,6 +651,12 @@ private val FR = Strings(
     playerOff = "Désactivé",
     playerAudioTemplate = "Audio (%1\$d)",
     playerSubtitlesTemplate = "Sous-titres (%1\$d)",
+
+    liveAllChannels = "Toutes les chaînes",
+    liveChannelsCountTemplate = "%1\$d chaînes",
+    liveNoChannelsInCategory = "Aucune chaîne dans cette catégorie.",
+    railOther = "Autre",
+    open = "Ouvrir",
 
     settingsTitle = "Paramètres", settingsDisplay = "Affichage et lecture",
     settingsParental = "Contrôle parental", settingsBackup = "Sauvegarde et restauration",
@@ -841,6 +860,12 @@ private val ES = Strings(
     playerAudioTemplate = "Audio (%1\$d)",
     playerSubtitlesTemplate = "Subtítulos (%1\$d)",
 
+    liveAllChannels = "Todos los canales",
+    liveChannelsCountTemplate = "%1\$d canales",
+    liveNoChannelsInCategory = "Sin canales en esta categoría.",
+    railOther = "Otros",
+    open = "Abrir",
+
     settingsTitle = "Ajustes", settingsDisplay = "Pantalla y reproducción",
     settingsParental = "Control parental", settingsBackup = "Copia y restauración",
     settingsLanguage = "Idioma", settingsTheme = "Tema",
@@ -1042,6 +1067,12 @@ private val AR = Strings(
     playerOff = "إيقاف",
     playerAudioTemplate = "صوت (%1\$d)",
     playerSubtitlesTemplate = "ترجمات (%1\$d)",
+
+    liveAllChannels = "كل القنوات",
+    liveChannelsCountTemplate = "%1\$d قناة",
+    liveNoChannelsInCategory = "لا توجد قنوات في هذه الفئة.",
+    railOther = "أخرى",
+    open = "فتح",
 
     settingsTitle = "الإعدادات", settingsDisplay = "العرض والتشغيل",
     settingsParental = "الرقابة الأبوية", settingsBackup = "النسخ الاحتياطي والاستعادة",

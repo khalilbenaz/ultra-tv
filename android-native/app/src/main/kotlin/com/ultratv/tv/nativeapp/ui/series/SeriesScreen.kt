@@ -53,7 +53,7 @@ fun SeriesScreen(onOpen: (Long) -> Unit, vm: SeriesListViewModel = hiltViewModel
                     featured!!.rating?.let { "★ %.1f".format(it) },
                 ).joinToString(" · "),
                 image = featured!!.poster,
-                primaryLabel = "Open",
+                primaryLabel = S.open,
                 onPrimary = { onOpen(featured!!.id) },
             )
         }
@@ -66,7 +66,7 @@ fun SeriesScreen(onOpen: (Long) -> Unit, vm: SeriesListViewModel = hiltViewModel
             }
             rails.forEach { rail ->
                 ContentRail(
-                    title = rail.category?.name ?: "Other",
+                    title = rail.category?.name ?: S.railOther,
                     items = rail.items,
                     itemKey = { it.id },
                 ) { s ->

@@ -57,7 +57,7 @@ fun MoviesScreen(onOpen: (Long) -> Unit, vm: MoviesViewModel = hiltViewModel()) 
                     featured!!.container?.uppercase(),
                 ).joinToString(" · "),
                 image = featured!!.poster,
-                primaryLabel = "Open",
+                primaryLabel = S.open,
                 onPrimary = { onOpen(featured!!.id) },
             )
         }
@@ -70,7 +70,7 @@ fun MoviesScreen(onOpen: (Long) -> Unit, vm: MoviesViewModel = hiltViewModel()) 
             }
             rails.forEach { rail ->
                 ContentRail(
-                    title = rail.category?.name ?: "Other",
+                    title = rail.category?.name ?: S.railOther,
                     items = rail.items,
                     itemKey = { it.id },
                 ) { m -> PosterCard(title = m.name, poster = m.poster, subtitle = m.year?.toString()) { onOpen(m.id) } }
