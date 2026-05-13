@@ -33,8 +33,29 @@ class ProviderRepository @Inject constructor(
     private val syncStatus: SyncStatusBus,
     private val xmltv: XmltvParser,
     private val epgDao: com.ultratv.tv.nativeapp.data.db.EpgDao,
+    private val searchDao: com.ultratv.tv.nativeapp.data.db.SearchDao,
 ) {
     private val adultRegex = Regex("xxx|adult|18\\+|porn|ero|adulte|للكبار", RegexOption.IGNORE_CASE)
+
+    /** Rebuilds the FTS index for this provider after a successful sync.
+     *  Wipes only this provider's rows so other providers stay searchable. */
+    private suspend fun rebuildSearchIndexFor(pid: Long) {
+        searchDao.clearChannelFtsForProvider(pid)
+        searchDao.clearMovieFtsForProvider(pid)
+        searchDao.clearSeriesFtsForProvider(pid)
+        val chans = channelDao.observeForProvider(pid).first()
+        val movs = movieDao.observeForProvider(pid).first()
+        val ser = seriesDao.observeForProvider(pid).first()
+        chans.chunked(500).forEach { batch ->
+            searchDao.upsertChannelFts(batch.map { com.ultratv.tv.nativeapp.data.db.ChannelFts(it.id, it.name) })
+        }
+        movs.chunked(500).forEach { batch ->
+            searchDao.upsertMovieFts(batch.map { com.ultratv.tv.nativeapp.data.db.MovieFts(it.id, it.name, it.plot) })
+        }
+        ser.chunked(500).forEach { batch ->
+            searchDao.upsertSeriesFts(batch.map { com.ultratv.tv.nativeapp.data.db.SeriesFts(it.id, it.name, it.plot) })
+        }
+    }
 
     // Chunk size for bulk inserts. Room flushes the WAL on each call so very
     // large lists (50k+ channels on big playlists) cause memory + I/O spikes;
@@ -342,6 +363,8 @@ class ProviderRepository @Inject constructor(
             step("Saving ${series.size} series…", 95)
             insertChunked(series) { seriesDao.upsertAll(it) }
 
+            step("Indexing search…", 97)
+            runCatching { rebuildSearchIndexFor(p.id) }
             step("Done — ${chans.size} live · ${movs.size} movies · ${series.size} series", 100)
             return chans.size + movs.size + series.size
         } finally {

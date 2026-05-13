@@ -15,8 +15,11 @@ import androidx.room.RoomDatabase
         EpgEntity::class,
         WatchHistoryEntity::class,
         RecordingEntity::class,
+        MovieFts::class,
+        SeriesFts::class,
+        ChannelFts::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class UltraDb : RoomDatabase() {
@@ -30,4 +33,5 @@ abstract class UltraDb : RoomDatabase() {
     abstract fun epgDao(): EpgDao
     abstract fun watchHistoryDao(): WatchHistoryDao
     abstract fun recordingDao(): RecordingDao
+    abstract fun searchDao(): SearchDao
 }

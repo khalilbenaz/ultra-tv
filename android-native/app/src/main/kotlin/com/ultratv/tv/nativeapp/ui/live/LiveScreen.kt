@@ -20,8 +20,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,7 +58,7 @@ import com.ultratv.tv.nativeapp.ui.common.prettyCategoryName
  * a 50k-channel provider only ~hundreds are composed at any time — that's
  * the main lag fix.
  */
-@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class, ExperimentalMaterial3Api::class)
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
 fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel = hiltViewModel()) {
     val cats by vm.categories.collectAsState()
@@ -68,16 +66,10 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
     val selected by vm.selectedCategory.collectAsState()
     val locked by vm.lockedChannels.collectAsState()
     val nowNext by vm.nowNext.collectAsState()
-    val refreshing by vm.refreshing.collectAsState()
     // Channel awaiting PIN unlock; non-null while the dialog is up.
     var pinPrompt by remember { mutableStateOf<com.ultratv.tv.nativeapp.data.db.ChannelEntity?>(null) }
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
 
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = { vm.refresh() },
-        modifier = Modifier.fillMaxSize(),
-    ) {
     Row(Modifier.fillMaxSize()) {
         // ---- Left pane: categories ----
         Column(
@@ -179,7 +171,6 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
             },
             onCancel = { pinPrompt = null },
         )
-    }
     }
 }
 

@@ -118,7 +118,7 @@ class GuideGridViewModel @Inject constructor(
     }
 }
 
-@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
 fun GuideGridScreen(
     onPlayChannel: (ChannelEntity) -> Unit,
@@ -137,11 +137,6 @@ fun GuideGridScreen(
     val windowEnd = remember(windowStart) { windowStart + 12 * 60 * 60 * 1000L }
 
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
-    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
-        isRefreshing = loading,
-        onRefresh = { vm.refreshXmltv() },
-        modifier = Modifier.fillMaxSize(),
-    ) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(S.tvGuide, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
@@ -194,7 +189,6 @@ fun GuideGridScreen(
                 }
             }
         }
-    }
     }
 }
 

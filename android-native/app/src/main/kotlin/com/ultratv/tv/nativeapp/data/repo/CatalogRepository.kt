@@ -5,6 +5,7 @@ import com.ultratv.tv.nativeapp.data.db.CategoryEntity
 import com.ultratv.tv.nativeapp.data.db.ChannelDao
 import com.ultratv.tv.nativeapp.data.db.ChannelEntity
 import com.ultratv.tv.nativeapp.data.db.EpgDao
+import com.ultratv.tv.nativeapp.data.db.SearchDao
 import com.ultratv.tv.nativeapp.data.db.EpgEntity
 import com.ultratv.tv.nativeapp.data.db.EpisodeDao
 import com.ultratv.tv.nativeapp.data.db.EpisodeEntity
@@ -35,6 +36,7 @@ class CatalogRepository @Inject constructor(
     private val categoryDao: CategoryDao,
     private val favoriteDao: FavoriteDao,
     private val epgDao: EpgDao,
+    private val searchDao: SearchDao,
     private val xtream: XtreamClient,
     private val stalker: com.ultratv.tv.nativeapp.data.stalker.StalkerClient,
 ) {
@@ -77,11 +79,36 @@ class CatalogRepository @Inject constructor(
     suspend fun search(pid: Long, query: String): SearchResults {
         if (query.isBlank()) return SearchResults()
         val q = query.trim()
-        return SearchResults(
-            channels = channelDao.search(pid, q),
-            movies = movieDao.search(pid, q),
-            series = seriesDao.search(pid, q),
-        )
+        val ftsQuery = toFtsQuery(q)
+        // FTS first (orders of magnitude faster on big catalogs). If the
+        // query escapes empty after sanitisation we fall back to LIKE so
+        // single-char inputs still work.
+        return if (ftsQuery.isNotBlank()) {
+            SearchResults(
+                channels = searchDao.searchChannels(pid, ftsQuery),
+                movies = searchDao.searchMovies(pid, ftsQuery),
+                series = searchDao.searchSeries(pid, ftsQuery),
+            )
+        } else {
+            SearchResults(
+                channels = channelDao.search(pid, q),
+                movies = movieDao.search(pid, q),
+                series = seriesDao.search(pid, q),
+            )
+        }
+    }
+
+    /** Sanitises a user query for FTS MATCH. Strips characters with special
+     *  meaning to FTS4 (parens, double quotes, NEAR/AND/OR/NOT), splits on
+     *  whitespace, appends `*` per token for prefix search. */
+    private fun toFtsQuery(raw: String): String {
+        val tokens = raw
+            .replace(Regex("[\"()*:]"), " ")
+            .lowercase()
+            .split(Regex("\\s+"))
+            .filter { it.length >= 2 && it !in FTS_RESERVED }
+        if (tokens.isEmpty()) return ""
+        return tokens.joinToString(" ") { "$it*" }
     }
 
     fun favoritesByKind(pid: Long, kind: String): Flow<List<FavoriteEntity>> =
@@ -118,3 +145,7 @@ data class SearchResults(
     val movies: List<MovieEntity> = emptyList(),
     val series: List<SeriesEntity> = emptyList(),
 )
+
+/** FTS4 reserved tokens — including these unquoted in a MATCH expression
+ *  is a syntax error, so we drop them before assembling the query. */
+private val FTS_RESERVED = setOf("and", "or", "not", "near")

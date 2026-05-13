@@ -1,6 +1,8 @@
 package com.ultratv.tv.nativeapp.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Fts4
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -160,4 +162,36 @@ data class EpgEntity(
     val description: String?,
     val startMs: Long,
     val endMs: Long,
+)
+
+/**
+ * Full-text-search indices. Standalone (no contentEntity) — populated
+ * manually from the matching content DAO upsert paths. This keeps the FTS
+ * table portable across destructive migrations and avoids the SQLite rowid
+ * pitfalls that come with Room's content-entity FTS mode.
+ *
+ * `rowid` mirrors the source entity's id so we can JOIN back to get the
+ * full row. Unicode61 tokenizer normalises diacritics + lowercases for free.
+ */
+@Entity(tableName = "movie_fts")
+@Fts4(tokenizer = "unicode61")
+data class MovieFts(
+    @PrimaryKey @ColumnInfo(name = "rowid") val rowid: Long,
+    val name: String,
+    val plot: String?,
+)
+
+@Entity(tableName = "series_fts")
+@Fts4(tokenizer = "unicode61")
+data class SeriesFts(
+    @PrimaryKey @ColumnInfo(name = "rowid") val rowid: Long,
+    val name: String,
+    val plot: String?,
+)
+
+@Entity(tableName = "channel_fts")
+@Fts4(tokenizer = "unicode61")
+data class ChannelFts(
+    @PrimaryKey @ColumnInfo(name = "rowid") val rowid: Long,
+    val name: String,
 )

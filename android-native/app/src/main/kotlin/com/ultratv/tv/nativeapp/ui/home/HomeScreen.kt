@@ -13,9 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,7 +35,7 @@ import androidx.tv.material3.Text
 import com.ultratv.tv.nativeapp.ui.common.ContentRail
 import com.ultratv.tv.nativeapp.ui.common.PosterCard
 
-@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class, ExperimentalMaterial3Api::class)
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onGoLive: () -> Unit,
@@ -52,16 +53,12 @@ fun HomeScreen(
     val movies by vm.featuredMovies.collectAsState()
     val series by vm.featuredSeries.collectAsState()
     val channels by vm.featuredChannels.collectAsState()
-    val refreshing by vm.refreshing.collectAsState()
 
     var actionsFor by remember { mutableStateOf<com.ultratv.tv.nativeapp.data.db.WatchHistoryEntity?>(null) }
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
+    val initialFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { initialFocus.requestFocus() } }
 
-    PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = { vm.refresh() },
-        modifier = Modifier.fillMaxSize(),
-    ) {
     Column(
         Modifier
             .fillMaxSize()
@@ -84,7 +81,10 @@ fun HomeScreen(
 
         // ---- Quick links ----
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onGoLive) { Text(S.live) }
+            Button(
+                onClick = onGoLive,
+                modifier = Modifier.focusRequester(initialFocus),
+            ) { Text(S.live) }
             Button(onClick = onGoMovies) { Text(S.movies) }
             Button(onClick = onGoSeries) { Text(S.series) }
             Button(onClick = onGoSettings) { Text(S.navSettings) }
@@ -186,7 +186,6 @@ fun HomeScreen(
             },
             onCancel = { actionsFor = null },
         )
-    }
     }
 }
 
