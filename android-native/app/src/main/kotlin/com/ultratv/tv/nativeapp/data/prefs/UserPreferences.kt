@@ -43,6 +43,8 @@ data class UserPrefs(
     /** Suppresses the onboarding wizard. Flipped to `true` when the user
      *  dismisses or completes it. */
     val hasSeenOnboarding: Boolean = false,
+    /** UI language code: "system", "en", "fr", "es", "ar". */
+    val language: String = "system",
 )
 
 @Singleton
@@ -62,6 +64,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val lastSyncAt = longPreferencesKey("last_sync_at_ms")
         val workerBase = stringPreferencesKey("worker_base_url")
         val seenOnboarding = booleanPreferencesKey("has_seen_onboarding")
+        val language = stringPreferencesKey("language")
     }
 
     val flow: Flow<UserPrefs> = ctx.userPrefsDs.data.map { p ->
@@ -80,6 +83,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
             lastSyncAtMs = p[Keys.lastSyncAt] ?: 0L,
             workerBaseUrl = p[Keys.workerBase] ?: "",
             hasSeenOnboarding = p[Keys.seenOnboarding] ?: false,
+            language = p[Keys.language] ?: "system",
         )
     }
 
@@ -97,6 +101,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
     suspend fun setLastSyncAt(ms: Long) = update { it[Keys.lastSyncAt] = ms }
     suspend fun setWorkerBase(url: String) = update { it[Keys.workerBase] = url.trim() }
     suspend fun markOnboardingSeen() = update { it[Keys.seenOnboarding] = true }
+    suspend fun setLanguage(code: String) = update { it[Keys.language] = code }
 
     private suspend inline fun update(crossinline block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         ctx.userPrefsDs.edit { block(it) }

@@ -43,4 +43,5 @@ class AppViewModel @Inject constructor(
         SyncScheduler.schedule(context, hours)
     }
     fun setWorkerBase(url: String) = viewModelScope.launch { store.setWorkerBase(url) }
+    fun setLanguage(code: String) = viewModelScope.launch { store.setLanguage(code) }
 }

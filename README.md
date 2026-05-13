@@ -71,7 +71,7 @@ A companion **Cloudflare Worker** (in `cloudflare-config/`) provides a MAC-based
 ### Personalization
 - 🎨 **3 themes**: Dark · AMOLED · Blue
 - 📐 **Adaptive nav**: sidebar on tablets/TV (≥ 840 dp), top bar on medium widths (600–840 dp, also the user-selectable option in Settings), bottom bar on phones (< 600 dp). Phones / tablets ship from the same APK.
-- 🌍 **Locale-aware** UI (follows system language)
+- 🌍 **Multi-language** UI: English / Français / Español / العربية + System (auto-detect). RTL layout direction flips automatically for Arabic. Translation table covers nav, home, settings and common buttons; the longer prose is still English for now.
 - 🔄 **Boot autolaunch** — open Ultra TV automatically when the box finishes booting
 - 🪟 **Picture-in-picture** — pressing Home while a stream plays shrinks the player into a corner (Android 8+)
 - 🪜 **Onboarding wizard** on first launch — 3-step flow showing the device MAC and the two provider-adding paths
@@ -189,7 +189,7 @@ In active development / next iterations:
 - 🔍 **Full-text search index** (Room FTS4) — current LIKE is ok up to ~10k items
 - 📥 **Recording / DVR** via WorkManager + HLS download
 - 🧪 **Stalker series episodes** (Live + VOD list are wired; episode listing within a Stalker series is the next gap)
-- 🌐 **Manual i18n** (FR / EN / ES / AR) — currently follows system locale
+- 🌐 **Extend i18n coverage** beyond nav / home / settings to every inline string (~100 more)
 
 ## Credits
 

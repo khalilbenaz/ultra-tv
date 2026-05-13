@@ -25,15 +25,15 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
-private data class BottomItem(val route: String, val label: String, val icon: String)
+private data class BottomItem(val route: String, val labelOf: (com.ultratv.tv.nativeapp.i18n.Strings) -> String, val icon: String)
 
 private val items = listOf(
-    BottomItem("home", "Home", "🏠"),
-    BottomItem("live", "Live", "📺"),
-    BottomItem("movies", "Movies", "🎬"),
-    BottomItem("series", "Series", "📚"),
-    BottomItem("search", "Search", "🔍"),
-    BottomItem("settings", "Settings", "⚙"),
+    BottomItem("home", { it.navHome }, "🏠"),
+    BottomItem("live", { it.navLive }, "📺"),
+    BottomItem("movies", { it.navMovies }, "🎬"),
+    BottomItem("series", { it.navSeries }, "📚"),
+    BottomItem("search", { it.navSearch }, "🔍"),
+    BottomItem("settings", { it.navSettings }, "⚙"),
 )
 
 /**
@@ -47,6 +47,7 @@ private val items = listOf(
 fun BottomBarNav(navController: NavController) {
     val current by navController.currentBackStackEntryAsState()
     val route = current?.destination?.route ?: "home"
+    val strings = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
 
     Row(
         Modifier
@@ -79,7 +80,7 @@ fun BottomBarNav(navController: NavController) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(item.icon, fontSize = 18.sp)
-                    Text(item.label, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    Text(item.labelOf(strings), fontSize = 10.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }

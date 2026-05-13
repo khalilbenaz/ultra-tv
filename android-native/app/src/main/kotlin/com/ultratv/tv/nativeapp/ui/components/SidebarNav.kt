@@ -25,19 +25,19 @@ import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
-private data class NavItem(val route: String, val label: String, val icon: String)
+private data class NavItem(val route: String, val labelOf: (com.ultratv.tv.nativeapp.i18n.Strings) -> String, val icon: String)
 
 private val items = listOf(
-    NavItem("home", "Home", "🏠"),
-    NavItem("live", "Live TV", "📺"),
-    NavItem("guide", "Guide", "🗓"),
-    NavItem("movies", "Movies", "🎬"),
-    NavItem("series", "Series", "📚"),
-    NavItem("favorites", "Favorites", "★"),
-    NavItem("search", "Search", "🔍"),
-    NavItem("categories", "Categories", "🏷"),
-    NavItem("multiview", "Multi-View", "▦"),
-    NavItem("settings", "Settings", "⚙"),
+    NavItem("home", { it.navHome }, "🏠"),
+    NavItem("live", { it.navLive }, "📺"),
+    NavItem("guide", { it.navGuide }, "🗓"),
+    NavItem("movies", { it.navMovies }, "🎬"),
+    NavItem("series", { it.navSeries }, "📚"),
+    NavItem("favorites", { it.navFavorites }, "★"),
+    NavItem("search", { it.navSearch }, "🔍"),
+    NavItem("categories", { it.navCategories }, "🏷"),
+    NavItem("multiview", { it.navMultiview }, "▦"),
+    NavItem("settings", { it.navSettings }, "⚙"),
 )
 
 @androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -45,6 +45,7 @@ private val items = listOf(
 fun SidebarNav(navController: NavController) {
     val current by navController.currentBackStackEntryAsState()
     val route = current?.destination?.route ?: "home"
+    val strings = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
 
     // Wrap items in a scrollable column — TV remotes auto-scroll a verticalScroll
     // container when focus moves below the visible area. Without this, items past
@@ -79,7 +80,7 @@ fun SidebarNav(navController: NavController) {
                         }
                     }
                 },
-                headlineContent = { Text(item.label, fontSize = 16.sp) },
+                headlineContent = { Text(item.labelOf(strings), fontSize = 16.sp) },
                 leadingContent = { Text(item.icon, fontSize = 18.sp) },
                 shape = ListItemDefaults.shape(shape = RoundedCornerShape(10.dp)),
             )

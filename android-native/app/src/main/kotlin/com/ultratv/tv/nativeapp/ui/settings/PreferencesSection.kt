@@ -65,6 +65,15 @@ fun PreferencesSection(vm: AppViewModel = hiltViewModel()) {
             IntervalChip("Every 12h", 12, p.syncIntervalHours, vm::setSyncInterval)
             IntervalChip("Every 24h", 24, p.syncIntervalHours, vm::setSyncInterval)
         }
+
+        PrefRow(label = "Language") {
+            com.ultratv.tv.nativeapp.i18n.AppLang.entries.forEach { lang ->
+                ChoiceChip(
+                    label = lang.displayName,
+                    on = p.language == lang.code,
+                ) { vm.setLanguage(lang.code) }
+            }
+        }
     }
 }
 

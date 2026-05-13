@@ -23,19 +23,19 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
-private data class TopBarItem(val route: String, val label: String, val icon: String)
+private data class TopBarItem(val route: String, val labelOf: (com.ultratv.tv.nativeapp.i18n.Strings) -> String, val icon: String)
 
 private val items = listOf(
-    TopBarItem("home", "Home", "🏠"),
-    TopBarItem("live", "Live", "📺"),
-    TopBarItem("guide", "Guide", "🗓"),
-    TopBarItem("movies", "Movies", "🎬"),
-    TopBarItem("series", "Series", "📚"),
-    TopBarItem("favorites", "Favorites", "★"),
-    TopBarItem("search", "Search", "🔍"),
-    TopBarItem("categories", "Categories", "🏷"),
-    TopBarItem("multiview", "Multi-View", "▦"),
-    TopBarItem("settings", "Settings", "⚙"),
+    TopBarItem("home", { it.navHome }, "🏠"),
+    TopBarItem("live", { it.navLive }, "📺"),
+    TopBarItem("guide", { it.navGuide }, "🗓"),
+    TopBarItem("movies", { it.navMovies }, "🎬"),
+    TopBarItem("series", { it.navSeries }, "📚"),
+    TopBarItem("favorites", { it.navFavorites }, "★"),
+    TopBarItem("search", { it.navSearch }, "🔍"),
+    TopBarItem("categories", { it.navCategories }, "🏷"),
+    TopBarItem("multiview", { it.navMultiview }, "▦"),
+    TopBarItem("settings", { it.navSettings }, "⚙"),
 )
 
 @androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -43,6 +43,7 @@ private val items = listOf(
 fun TopBarNav(navController: NavController) {
     val current by navController.currentBackStackEntryAsState()
     val route = current?.destination?.route ?: "home"
+    val strings = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
 
     Row(
         Modifier
@@ -77,7 +78,7 @@ fun TopBarNav(navController: NavController) {
                 else ButtonDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
             ) {
-                Text("${item.icon}  ${item.label}", fontSize = 14.sp)
+                Text("${item.icon}  ${item.labelOf(strings)}", fontSize = 14.sp)
             }
         }
     }
