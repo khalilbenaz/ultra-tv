@@ -47,6 +47,10 @@ data class Strings(
     val homeFeaturedSeries: String,
     val onboardingMacLabel: String,
     val onboardingOpenSettings: String,
+    val onboardingFirstTime: String,
+    val onboardingTwoPaths: String,
+    val onboardingPathManual: String,
+    val onboardingPathCloud: String,
 
     // Settings sections
     val settingsTitle: String,
@@ -127,6 +131,10 @@ private val EN = Strings(
     homeFeaturedSeries = "Series",
     onboardingMacLabel = "Your device MAC:",
     onboardingOpenSettings = "Open Settings",
+    onboardingFirstTime = "First-time setup",
+    onboardingTwoPaths = "Two paths to add a provider:",
+    onboardingPathManual = "1. Open Settings → +Xtream / +M3U / +M3U file / +Stalker, fill in the form.",
+    onboardingPathCloud = "2. Self-host the Cloudflare Worker from cloudflare-config/, paste this MAC in its dashboard, then in Settings → Set worker URL → Sync from cloud.",
 
     settingsTitle = "Settings", settingsDisplay = "Display & playback",
     settingsParental = "Parental controls", settingsBackup = "Backup & restore",
@@ -179,6 +187,10 @@ private val FR = Strings(
     homeFeaturedSeries = "Séries",
     onboardingMacLabel = "MAC de l'appareil :",
     onboardingOpenSettings = "Ouvrir les paramètres",
+    onboardingFirstTime = "Première configuration",
+    onboardingTwoPaths = "Deux façons d'ajouter un fournisseur :",
+    onboardingPathManual = "1. Ouvre Paramètres → +Xtream / +M3U / +M3U fichier / +Stalker et remplis le formulaire.",
+    onboardingPathCloud = "2. Héberge le worker Cloudflare depuis cloudflare-config/, colle ce MAC dans son tableau de bord, puis Paramètres → Définir l'URL du worker → Sync depuis le cloud.",
 
     settingsTitle = "Paramètres", settingsDisplay = "Affichage et lecture",
     settingsParental = "Contrôle parental", settingsBackup = "Sauvegarde et restauration",
@@ -231,6 +243,10 @@ private val ES = Strings(
     homeFeaturedSeries = "Series",
     onboardingMacLabel = "MAC del dispositivo:",
     onboardingOpenSettings = "Abrir ajustes",
+    onboardingFirstTime = "Configuración inicial",
+    onboardingTwoPaths = "Dos formas de añadir un proveedor:",
+    onboardingPathManual = "1. Abre Ajustes → +Xtream / +M3U / +M3U archivo / +Stalker y rellena el formulario.",
+    onboardingPathCloud = "2. Aloja el worker de Cloudflare desde cloudflare-config/, pega esta MAC en su panel y luego Ajustes → Definir URL del worker → Sync desde la nube.",
 
     settingsTitle = "Ajustes", settingsDisplay = "Pantalla y reproducción",
     settingsParental = "Control parental", settingsBackup = "Copia y restauración",
@@ -283,6 +299,10 @@ private val AR = Strings(
     homeFeaturedSeries = "المسلسلات",
     onboardingMacLabel = "عنوان MAC للجهاز:",
     onboardingOpenSettings = "فتح الإعدادات",
+    onboardingFirstTime = "الإعداد الأول",
+    onboardingTwoPaths = "طريقتان لإضافة موفّر:",
+    onboardingPathManual = "1. افتح الإعدادات ← +Xtream / +M3U / +M3U ملف / +Stalker واملأ النموذج.",
+    onboardingPathCloud = "2. استضف Cloudflare Worker من cloudflare-config/، ألصق عنوان MAC هذا في لوحة التحكم، ثم الإعدادات ← تعيين رابط الـ worker ← مزامنة من السحابة.",
 
     settingsTitle = "الإعدادات", settingsDisplay = "العرض والتشغيل",
     settingsParental = "الرقابة الأبوية", settingsBackup = "النسخ الاحتياطي والاستعادة",

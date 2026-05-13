@@ -76,10 +76,10 @@ fun HomeScreen(
 
         // ---- Quick links ----
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onGoLive) { Text("Live TV") }
-            Button(onClick = onGoMovies) { Text("Movies") }
-            Button(onClick = onGoSeries) { Text("Series") }
-            Button(onClick = onGoSettings) { Text("Settings") }
+            Button(onClick = onGoLive) { Text(S.live) }
+            Button(onClick = onGoMovies) { Text(S.movies) }
+            Button(onClick = onGoSeries) { Text(S.series) }
+            Button(onClick = onGoSettings) { Text(S.navSettings) }
         }
 
         Spacer(Modifier.height(4.dp))
@@ -132,7 +132,7 @@ fun HomeScreen(
 
         if (series.isNotEmpty()) {
             ContentRail(
-                title = "Series",
+                title = S.seriesTitle,
                 items = series,
                 itemKey = { it.id },
             ) { s ->
@@ -201,13 +201,14 @@ private fun ContinueActions(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, maxLines = 2)
+            val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
             androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = onResume) { Text("▶ Resume") }
+                Button(onClick = onResume) { Text("▶ " + S.resume) }
                 Button(onClick = onDismiss, colors = androidx.tv.material3.ButtonDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Text("✖ Dismiss")
+                    Text("✖ " + S.dismiss)
                 }
                 Button(onClick = onCancel, colors = androidx.tv.material3.ButtonDefaults.colors(containerColor = MaterialTheme.colorScheme.background)) {
-                    Text("Cancel")
+                    Text(S.cancel)
                 }
             }
         }
@@ -217,6 +218,7 @@ private fun ContinueActions(
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
 private fun MacOnboardingCard(mac: String, onGoSettings: () -> Unit) {
+    val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -225,8 +227,8 @@ private fun MacOnboardingCard(mac: String, onGoSettings: () -> Unit) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("👋 First-time setup", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text("Your device MAC:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("👋 " + S.onboardingFirstTime, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(S.onboardingMacLabel, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(
             mac,
             fontSize = 28.sp,
@@ -239,19 +241,19 @@ private fun MacOnboardingCard(mac: String, onGoSettings: () -> Unit) {
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "Two paths to add a provider:",
+            S.onboardingTwoPaths,
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp,
         )
         Text(
-            "1. Open Settings → +Xtream / +M3U / +M3U file / +Stalker, fill in the form.",
+            S.onboardingPathManual,
             color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp,
         )
         Text(
-            "2. Self-host the Cloudflare Worker from cloudflare-config/, paste this MAC in its dashboard, then in Settings → Set worker URL → Sync from cloud.",
+            S.onboardingPathCloud,
             color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp,
         )
         Spacer(Modifier.height(4.dp))
-        Button(onClick = onGoSettings) { Text("Open Settings") }
+        Button(onClick = onGoSettings) { Text(S.onboardingOpenSettings) }
     }
 }
 
