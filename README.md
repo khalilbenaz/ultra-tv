@@ -55,6 +55,7 @@ A companion **Cloudflare Worker** (in `cloudflare-config/`) provides a MAC-based
 - 🎮 D-pad: BACK = exit, plus **Live**: ▲/▼ zap channels in the current category; **VOD**: ◀/▶ seek
 - 🎚 **Subtitle + audio track selector** (VOD only) — reads Tracks from Media3, applies a TrackSelectionOverride
 - 📋 **EPG drawer overlay** (Live only) — press OK / center to slide in a right-side channel list with now/next; D-pad picks a channel to zap to
+- 📡 **Chromecast button** in the player toolbar — opens the system Cast picker when Google Play Services are available (silent no-op on Cast-less Android TV builds)
 - ⏸️ **Continue watching** (position recorded every 10 s + on dispose)
 - 🚀 **Auto-play last watched on launch** option
 - 🥷 **Open in external player** (VLC / MX / Just Player / Next Player) for codecs Media3 can't handle
@@ -89,7 +90,7 @@ A companion **Cloudflare Worker** (in `cloudflare-config/`) provides a MAC-based
 - 📦 **Chunked DB inserts** (500 rows / batch) during sync — flat memory on huge catalogs
 - ⚡ **DB indices** on `(providerId, categoryId)` for fast category filtering
 - 🎯 SQL-level filtering for Live TV per category (only the visible subset materialises)
-- 🧱 **R8 / ProGuard release build** with resource shrinking — **18 MB debug → 3.4 MB release** (latest APK shipped is the release variant)
+- 🧱 **R8 / ProGuard release build** with resource shrinking — **18 MB debug → 4.9 MB release** (incl. Google Cast SDK) (latest APK shipped is the release variant)
 - 📑 **Paging Room** for Movies / Series flat-grid (pages of 60, only ~120 items in memory regardless of catalog size)
 
 ### Distribution
@@ -186,7 +187,6 @@ In active development / next iterations:
 
 - 📊 **7-day xmltv** (current grid covers 12 h; longer window is a windowing change away)
 - 🔍 **Full-text search index** (Room FTS4) — current LIKE is ok up to ~10k items
-- 📻 **Chromecast** (Media3-cast)
 - 📥 **Recording / DVR** via WorkManager + HLS download
 - 🧪 **Stalker VOD / series** endpoints (only Live supported today)
 - 🌐 **Manual i18n** (FR / EN / ES / AR) — currently follows system locale

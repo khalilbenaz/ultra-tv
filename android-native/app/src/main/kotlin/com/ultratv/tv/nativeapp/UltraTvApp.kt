@@ -41,4 +41,15 @@ class UltraTvApp : Application(), ImageLoaderFactory, Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
+
+    override fun onCreate() {
+        super.onCreate()
+        // Initialise the Cast SDK eagerly so the first time the player asks
+        // for CastContext.getSharedInstance() it doesn't block. We swallow the
+        // exception when Google Play Services are absent (some Android TV
+        // builds strip them) — the player will just not show the Cast button.
+        runCatching {
+            com.google.android.gms.cast.framework.CastContext.getSharedInstance(this) { it.run() }
+        }
+    }
 }
