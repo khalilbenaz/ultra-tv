@@ -245,13 +245,14 @@ private fun NavGraph(nav: androidx.navigation.NavHostController) {
             )
         }
         composable("categories") { CategoriesScreen() }
+        composable("locked-channels") { com.ultratv.tv.nativeapp.ui.parental.LockedChannelsScreen() }
         composable(Routes.FAVORITES) {
             FavoritesScreen(
                 onOpenMovie = { id -> nav.navigate(Routes.movieDetail(id)) },
                 onOpenSeries = { id -> nav.navigate(Routes.seriesDetail(id)) },
             )
         }
-        composable(Routes.SETTINGS) { SettingsScreen() }
+        composable(Routes.SETTINGS) { SettingsScreen(onNavigate = { route -> nav.navigate(route) }) }
         composable(
             route = Routes.PLAYER,
             arguments = listOf(

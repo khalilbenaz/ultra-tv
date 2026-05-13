@@ -65,6 +65,7 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
     val chans by vm.channels.collectAsState()
     val selected by vm.selectedCategory.collectAsState()
     val locked by vm.lockedChannels.collectAsState()
+    val nowNext by vm.nowNext.collectAsState()
     // Channel awaiting PIN unlock; non-null while the dialog is up.
     var pinPrompt by remember { mutableStateOf<com.ultratv.tv.nativeapp.data.db.ChannelEntity?>(null) }
 
@@ -142,7 +143,14 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
                 ) {
                     itemsIndexed(chans, key = { _, c -> c.id }) { i, c ->
                         val isLocked = "${c.providerId}:${c.remoteId}" in locked
-                        ChannelRow(channel = c, position = i + 1, locked = isLocked) {
+                        val nn = nowNext[c.id]
+                        ChannelRow(
+                            channel = c,
+                            position = i + 1,
+                            locked = isLocked,
+                            nowProgramme = nn?.first,
+                            nextProgramme = nn?.second,
+                        ) {
                             if (isLocked) pinPrompt = c
                             else vm.resolveAndPlay(c, onPlay)
                         }
@@ -193,7 +201,14 @@ private fun CategoryRow(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ChannelRow(channel: ChannelEntity, position: Int, locked: Boolean = false, onClick: () -> Unit) {
+private fun ChannelRow(
+    channel: ChannelEntity,
+    position: Int,
+    locked: Boolean = false,
+    nowProgramme: com.ultratv.tv.nativeapp.data.db.EpgEntity? = null,
+    nextProgramme: com.ultratv.tv.nativeapp.data.db.EpgEntity? = null,
+    onClick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     Card(
@@ -230,14 +245,24 @@ private fun ChannelRow(channel: ChannelEntity, position: Int, locked: Boolean = 
                     Text("📺", fontSize = 22.sp)
                 }
             }
-            Text(
-                channel.name + if (locked) "  🔒" else "",
-                color = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onBackground,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    channel.name + if (locked) "  🔒" else "",
+                    color = if (focused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onBackground,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+                if (nowProgramme != null) {
+                    Text(
+                        "▶ ${nowProgramme.title}" + (nextProgramme?.let { "  ·  next: ${it.title}" } ?: ""),
+                        color = if (focused) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -99,6 +100,17 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
 
     val player = remember {
         ExoPlayer.Builder(context).build().apply { playWhenReady = true }
+    }
+
+    // Stream-stats overlay: tracks codec/resolution/bitrate while playing.
+    var statsOpen by remember { mutableStateOf(false) }
+    var stats by remember { mutableStateOf(StreamStats()) }
+    LaunchedEffect(statsOpen) {
+        if (!statsOpen) return@LaunchedEffect
+        while (true) {
+            stats = StreamStats.read(player)
+            delay(1_000)
+        }
     }
 
     // Sleep-timer: when > 0, stops playback at the given timestamp. The
@@ -194,6 +206,9 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
                     }
                 }
             }
+            Button(onClick = { statsOpen = !statsOpen }) {
+                Text(if (statsOpen) "📊 Hide stats" else "📊 Stats")
+            }
             Button(onClick = {
                 runCatching {
                     val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -204,6 +219,66 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
                     context.startActivity(Intent.createChooser(intent, "Open with…"))
                 }
             }) { Text("External player") }
+        }
+        if (statsOpen) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 24.dp, end = 24.dp)
+                    .background(Color(0xCC000000), androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                    .padding(12.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp),
+            ) {
+                Text("📊 Stream stats", color = Color(0xFF66B3FF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                StatRow("Resolution", stats.resolution)
+                StatRow("Video codec", stats.videoCodec)
+                StatRow("Frame rate", stats.frameRate)
+                StatRow("Video bitrate", stats.videoBitrate)
+                StatRow("Audio codec", stats.audioCodec)
+                StatRow("Audio channels", stats.audioChannels)
+                StatRow("Buffered", stats.bufferedAhead)
+                StatRow("Dropped frames", stats.droppedFrames)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatRow(label: String, value: String) {
+    androidx.compose.foundation.layout.Row(
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        Text(label, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp, modifier = Modifier.width(90.dp))
+        Text(value, color = Color.White, fontSize = 11.sp)
+    }
+}
+
+private data class StreamStats(
+    val resolution: String = "—",
+    val videoCodec: String = "—",
+    val frameRate: String = "—",
+    val videoBitrate: String = "—",
+    val audioCodec: String = "—",
+    val audioChannels: String = "—",
+    val bufferedAhead: String = "—",
+    val droppedFrames: String = "—",
+) {
+    companion object {
+        @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+        fun read(player: ExoPlayer): StreamStats {
+            val v = player.videoFormat
+            val a = player.audioFormat
+            val bufferedMs = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0)
+            return StreamStats(
+                resolution = v?.let { "${it.width}×${it.height}" } ?: "—",
+                videoCodec = v?.sampleMimeType?.removePrefix("video/") ?: "—",
+                frameRate = v?.frameRate?.takeIf { it > 0 }?.let { "%.1f fps".format(it) } ?: "—",
+                videoBitrate = v?.bitrate?.takeIf { it > 0 }?.let { "${it / 1000} kbps" } ?: "—",
+                audioCodec = a?.sampleMimeType?.removePrefix("audio/") ?: "—",
+                audioChannels = a?.channelCount?.toString() ?: "—",
+                bufferedAhead = "${bufferedMs / 1000}s",
+                droppedFrames = "n/a",
+            )
         }
     }
 }

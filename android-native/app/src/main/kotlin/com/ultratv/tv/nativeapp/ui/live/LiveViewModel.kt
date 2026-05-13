@@ -38,10 +38,47 @@ class LiveViewModel @Inject constructor(
     private val hiddenStore: HiddenCategoriesStore,
     private val lockedStore: LockedChannelsStore,
     private val playback: PlaybackContext,
+    private val epgDaoArg: com.ultratv.tv.nativeapp.data.db.EpgDao,
 ) : ViewModel() {
 
     val lockedChannels: StateFlow<Set<String>> = lockedStore.locked
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    // EPG now/next per channel for the current visible list. We re-query every
+    // 60s as well as whenever the channel list changes; rangeForChannels with
+    // an IN(...) on a few hundred ids is fast (indices on channelId).
+    private val _nowNext = MutableStateFlow<Map<Long, Pair<com.ultratv.tv.nativeapp.data.db.EpgEntity?, com.ultratv.tv.nativeapp.data.db.EpgEntity?>>>(emptyMap())
+    val nowNext: StateFlow<Map<Long, Pair<com.ultratv.tv.nativeapp.data.db.EpgEntity?, com.ultratv.tv.nativeapp.data.db.EpgEntity?>>> = _nowNext.asStateFlow()
+
+    private val epgDao = epgDaoArg
+
+    init {
+        viewModelScope.launch {
+            channels.collect { list ->
+                if (list.isEmpty()) { _nowNext.value = emptyMap(); return@collect }
+                refreshNowNext(list.map { it.id })
+            }
+        }
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(60_000)
+                refreshNowNext(channels.value.map { it.id })
+            }
+        }
+    }
+
+    private suspend fun refreshNowNext(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val rows = epgDao.rangeForChannels(ids, now - 30 * 60_000, now + 6 * 60 * 60_000)
+        val byCh = rows.groupBy { it.channelId }
+        _nowNext.value = ids.associateWith { id ->
+            val list = byCh[id].orEmpty()
+            val nowProg = list.firstOrNull { it.startMs <= now && it.endMs > now }
+            val nextProg = list.firstOrNull { it.startMs > now }
+            nowProg to nextProg
+        }
+    }
 
     fun toggleLock(channel: ChannelEntity) {
         viewModelScope.launch {

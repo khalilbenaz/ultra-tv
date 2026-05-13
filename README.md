@@ -39,7 +39,7 @@ A companion **Cloudflare Worker** (in `cloudflare-config/`) provides a MAC-based
 
 ### Live TV
 - 📺 **Tivimate-style two-pane layout**: categories on the left, channels of the selected category on the right
-- 🔢 Channel position numbers, logos, focus highlight
+- 🔢 Channel position numbers, logos, focus highlight, **now-playing + next-up programme** under each name (from cached EPG)
 - 🏷️ **Categories management** (search, bulk Hide / Show, "Hide adult" preset, 🔒 / 🔞 markers)
 - 🧹 Cleans decorative wrappers (`### FRANCE ###` → `FRANCE`) for display while keeping DB intact
 
@@ -57,6 +57,7 @@ A companion **Cloudflare Worker** (in `cloudflare-config/`) provides a MAC-based
 - 🚀 **Auto-play last watched on launch** option
 - 🥷 **Open in external player** (VLC / MX / Just Player / Next Player) for codecs Media3 can't handle
 - 💤 **Sleep timer** (15 min · 30 min · 1 h · 2 h · cancel) — pauses + exits player at the deadline
+- 📊 **Stream stats overlay** — resolution / video & audio codec / frame rate / bitrate / buffer ahead, toggled from the player overlay
 
 ### Discovery / Home
 - 🏠 Dynamic Home: **Continue watching**, **Recently watched**, **Movies**, **Series**, **Featured channels** rails
@@ -76,6 +77,7 @@ A companion **Cloudflare Worker** (in `cloudflare-config/`) provides a MAC-based
 
 ### Security
 - 🔐 **Parental PIN** (SHA-256, DataStore-backed) — auto-locks adult categories on each sync when a PIN is set
+- 🔒 **Per-channel lock** — Settings → Manage locked channels lets you flag individual channels; play prompts for the PIN
 - 🆔 **Stable per-device MAC** derived from `ANDROID_ID` (hashed) — never the real WiFi MAC
 
 ### Performance
@@ -186,7 +188,6 @@ In active development / next iterations:
 - 🎚️ **Subtitles + audio track selection** UI (Media3 already supports them)
 - 📥 **Recording / DVR** via WorkManager + HLS download
 - 🧪 **Stalker VOD / series** endpoints (only Live supported today)
-- 🔇 **Lock individual channels** — UI toggle (PIN gate at play is already wired)
 - 🩹 **Onboarding wizard** for first launch (toast layer + dialog forms are done)
 
 ## Credits

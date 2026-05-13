@@ -42,7 +42,10 @@ private enum class OpenDialog { NONE, XTREAM, M3U_URL, STALKER, WORKER }
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    onNavigate: (String) -> Unit = {},
+    vm: SettingsViewModel = hiltViewModel(),
+) {
     val providers by vm.providers.collectAsState()
     val message by vm.message.collectAsState()
     val syncing by vm.syncing.collectAsState()
@@ -256,7 +259,9 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
         // ---- 5. Parental ----
         SectionCard {
             Text("Parental controls", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            com.ultratv.tv.nativeapp.ui.parental.ParentalSection()
+            com.ultratv.tv.nativeapp.ui.parental.ParentalSection(
+                onManageLockedChannels = { onNavigate("locked-channels") },
+            )
             Text(
                 "When a PIN is set, adult categories (xxx / adult / 18+ / etc.) auto-lock on each sync.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp,

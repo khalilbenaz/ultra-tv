@@ -59,7 +59,10 @@ class ParentalViewModel @Inject constructor(
 }
 
 @Composable
-fun ParentalSection(vm: ParentalViewModel = hiltViewModel()) {
+fun ParentalSection(
+    vm: ParentalViewModel = hiltViewModel(),
+    onManageLockedChannels: () -> Unit = {},
+) {
     val set by vm.pinSet.collectAsState()
     var dialog by remember { mutableStateOf(false) }
 
@@ -72,6 +75,7 @@ fun ParentalSection(vm: ParentalViewModel = hiltViewModel()) {
         )
         Button(onClick = { dialog = true }) { Text(if (set) "Change PIN" else "Set PIN") }
         if (set) Button(onClick = { vm.setPin("") {} }) { Text("Clear") }
+        Button(onClick = onManageLockedChannels) { Text("Manage locked channels…") }
     }
     if (dialog) {
         PinSetDialog(onCancel = { dialog = false }, onConfirm = { pin ->
