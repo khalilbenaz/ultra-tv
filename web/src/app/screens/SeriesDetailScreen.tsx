@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { providerRepo, seriesRepo } from "@data/db/repositories";
 import { loadSeriesEpisodes } from "@data/sync/syncCatalog";
+import { resolveEpisodeUrl } from "@data/providers/xtream";
+import type { Provider } from "@domain/model";
 import { PlayerWithControls } from "@app/components/PlayerWithControls";
 import { FavoriteButton } from "@app/components/FavoriteButton";
 import { WatchlistButton } from "@app/components/WatchlistButton";
@@ -17,6 +19,7 @@ export function SeriesDetailScreen() {
   const [series, setSeries] = useState<Series | null>(null);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [active, setActive] = useState<Episode | null>(null);
+  const [provider, setProvider] = useState<Provider | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,6 +31,7 @@ export function SeriesDetailScreen() {
       setSeries(s);
       const provider = await providerRepo.get(s.providerId);
       if (!provider) return;
+      if (!cancelled) setProvider(provider);
       try {
         const { seasons: ses, enriched } = await loadSeriesEpisodes(provider, s.seriesId);
         if (cancelled) return;
@@ -58,18 +62,19 @@ export function SeriesDetailScreen() {
 
   const stream: StreamInfo | null = useMemo(() => {
     if (!active) return null;
+    const url = provider ? resolveEpisodeUrl(provider, active) : active.streamUrl;
     return {
-      url: active.streamUrl,
+      url,
       title: active.title,
       headers: {},
-      userAgent: null,
+      userAgent: provider?.userAgent || null,
       streamType: streamTypeFromExtension(active.containerExtension),
       containerExtension: active.containerExtension,
       catchUpUrl: null,
       expirationTime: null,
       drmInfo: null,
     };
-  }, [active]);
+  }, [active, provider]);
 
   // Auto-play next episode when the current one ends would hook here once the
   // VideoPlayer surfaces an onEnded callback — left as a follow-up.

@@ -106,7 +106,8 @@ private val FILTERS = listOf("Tous", "Films", "Séries", "Chaînes", "Sport", "D
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    onOpenChannel: (Long) -> Unit,
+    // (streamUrl, title) — same play path the Live/Guide screens use.
+    onOpenChannel: (String, String) -> Unit,
     onOpenMovie: (Long) -> Unit,
     onOpenSeries: (Long) -> Unit,
     vm: SearchViewModel = hiltViewModel(),
@@ -326,7 +327,7 @@ fun SearchScreen(
             }
             if (showAll || activeFilter == 3) {
                 ResultSection("Chaînes en direct", r.channels, total) { c ->
-                    ChannelResultCard(c, onClick = { onOpenChannel(c.id) })
+                    ChannelResultCard(c, onClick = { onOpenChannel(c.streamUrl, c.name) })
                 }
             }
 

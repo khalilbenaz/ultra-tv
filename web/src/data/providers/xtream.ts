@@ -2,6 +2,7 @@
 // Endpoints from the Xtream Codes player API (`player_api.php`).
 
 import { proxiedJson } from "@data/net/proxy";
+import type { Channel, Episode, Movie, Provider } from "@domain/model";
 
 export interface XtreamCreds {
   serverUrl: string;
@@ -214,3 +215,45 @@ export const xtream = {
     return `${normalizeBase(c.serverUrl)}series/${c.username}/${c.password}/${episodeId}.${ext}`;
   },
 };
+
+// --- On-demand stream URL resolution (M-3) ---------------------------------
+//
+// Xtream catalog rows no longer persist a fully-credentialed stream URL
+// (`http://host/movie/user/pass/123.mp4`). Storing user:pass on every row meant
+// BackupManager exports leaked credentials in plaintext JSON. Instead, Xtream
+// rows store only the lean rebuildable form — `streamId`/`episodeId` plus
+// `containerExtension` (already present on the row) — and the URL is built at
+// play time from the live Provider record.
+//
+// Backward compatibility: rows synced before this change still carry a
+// non-empty `streamUrl`; resolvers prefer that value when present. New Xtream
+// syncs store an empty `streamUrl`. M3U / Stalker providers have no rebuildable
+// form, so their stored `streamUrl` is always used as-is.
+
+function credsOf(p: Provider): XtreamCreds {
+  return {
+    serverUrl: p.serverUrl,
+    username: p.username,
+    password: p.password,
+    userAgent: p.userAgent || null,
+    referer: p.httpReferer || null,
+  };
+}
+
+/** Build the live channel stream URL from a Provider + Channel row. */
+export function resolveChannelUrl(provider: Provider, channel: Pick<Channel, "streamUrl" | "streamId">): string {
+  if (channel.streamUrl) return channel.streamUrl; // legacy row or M3U/Stalker
+  return xtream.liveStreamUrl(credsOf(provider), channel.streamId);
+}
+
+/** Build the VOD/movie stream URL from a Provider + Movie row. */
+export function resolveMovieUrl(provider: Provider, movie: Pick<Movie, "streamUrl" | "streamId" | "containerExtension">): string {
+  if (movie.streamUrl) return movie.streamUrl; // legacy row
+  return xtream.vodStreamUrl(credsOf(provider), movie.streamId, movie.containerExtension || "mp4");
+}
+
+/** Build the series episode stream URL from a Provider + Episode row. */
+export function resolveEpisodeUrl(provider: Provider, episode: Pick<Episode, "streamUrl" | "episodeId" | "containerExtension">): string {
+  if (episode.streamUrl) return episode.streamUrl; // legacy row
+  return xtream.seriesEpisodeUrl(credsOf(provider), episode.episodeId, episode.containerExtension || "mp4");
+}

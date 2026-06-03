@@ -1,0 +1,4 @@
+# electron-builder buildResources directory.
+# App icons (icon.icns / icon.ico / icon.png) belong here — see ../README.md.
+# Generate them with `npm run icons` from ../docs/redesign/logo.svg.
+# Binary icons are intentionally NOT committed; regenerate locally / in CI.

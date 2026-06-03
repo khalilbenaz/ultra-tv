@@ -233,11 +233,70 @@ function randomSalt() {
   return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function passwordMatches(cfg, supplied) {
-  if (!cfg.passwordHash) return true; // legacy / unprotected
-  if (!supplied) return false;
+// PBKDF2 parameters. The stored hash is self-describing —
+// `pbkdf2$<iterations>$<hex>` — so verification reads the iteration count back
+// out of the record and future deployments can bump PBKDF2_ITERS without
+// breaking older hashes. 100k SHA-256 iterations is the OWASP floor.
+const PBKDF2_ITERS = 100_000;
+const PBKDF2_KEYLEN_BITS = 256;
+
+function bufToHex(buf) {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** Derive a PBKDF2-SHA256 hex digest of `salt:plaintext`. */
+async function pbkdf2Hex(salt, plaintext, iterations = PBKDF2_ITERS) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(salt + ":" + plaintext),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: new TextEncoder().encode(salt), iterations, hash: "SHA-256" },
+    key,
+    PBKDF2_KEYLEN_BITS,
+  );
+  return bufToHex(bits);
+}
+
+/** Format a PBKDF2 digest into the versioned, self-describing storage string. */
+function pbkdf2Format(iterations, hex) {
+  return `pbkdf2$${iterations}$${hex}`;
+}
+
+/** True if a stored passwordHash is in the new PBKDF2 format (vs legacy SHA-256). */
+function isPbkdf2Hash(stored) {
+  return typeof stored === "string" && stored.startsWith("pbkdf2$");
+}
+
+/**
+ * Verify `supplied` against cfg.passwordHash. Detects the storage format:
+ *   - `pbkdf2$<iters>$<hex>` → PBKDF2-SHA256 with the embedded iteration count.
+ *   - bare 64-char hex       → legacy single-pass sha256Hex(salt:pw).
+ * Returns { ok, legacy } so callers can trigger upgrade-on-login when a legacy
+ * hash verified successfully.
+ */
+async function verifyPassword(cfg, supplied) {
+  if (!cfg.passwordHash) return { ok: true, legacy: false }; // unprotected
+  if (!supplied) return { ok: false, legacy: false };
+  if (isPbkdf2Hash(cfg.passwordHash)) {
+    const parts = cfg.passwordHash.split("$"); // ["pbkdf2", iters, hex]
+    const iterations = parseInt(parts[1], 10) || PBKDF2_ITERS;
+    const computed = await pbkdf2Hex(cfg.salt, supplied, iterations);
+    return { ok: timingSafeEqual(computed, parts[2] || ""), legacy: false };
+  }
+  // Legacy scheme.
   const computed = await sha256Hex(cfg.salt + ":" + supplied);
-  return timingSafeEqual(computed, cfg.passwordHash);
+  return { ok: timingSafeEqual(computed, cfg.passwordHash), legacy: true };
+}
+
+/** Back-compat boolean wrapper used by read-gated paths that don't upgrade. */
+async function passwordMatches(cfg, supplied) {
+  return (await verifyPassword(cfg, supplied)).ok;
 }
 
 async function setPassword(cfg, plaintext) {
@@ -249,8 +308,9 @@ async function setPassword(cfg, plaintext) {
     delete cfg.protectReads;
     return;
   }
-  cfg.salt = cfg.salt || randomSalt();
-  cfg.passwordHash = await sha256Hex(cfg.salt + ":" + plaintext);
+  // Rotate to a fresh salt so the new PBKDF2 hash never reuses a legacy salt.
+  cfg.salt = randomSalt();
+  cfg.passwordHash = pbkdf2Format(PBKDF2_ITERS, await pbkdf2Hex(cfg.salt, plaintext));
 }
 
 // ---- Crash reporting -------------------------------------------------------
@@ -564,7 +624,8 @@ async function handle(req, env) {
       const cfg = await readConfig(env, mac);
       if (!cfg.passwordHash && !cfg.providers?.length) return redirect(`/signup?mac=${encodeURIComponent(mac)}`);
       if (!cfg.passwordHash) return redirect(`/signup?mac=${encodeURIComponent(mac)}&e=claim`);
-      if (!(await passwordMatches(cfg, password))) {
+      const verdict = await verifyPassword(cfg, password);
+      if (!verdict.ok) {
         const fails = (prevLock.fails || 0) + 1;
         const locked = fails >= 5;
         const backoffMs = lockoutBackoffMs(fails); // 0 until the 5th fail
@@ -577,6 +638,13 @@ async function handle(req, env) {
           { expirationTtl: ttl },
         );
         return redirect(locked ? "/login?e=locked" : "/login?e=pw");
+      }
+      // Upgrade-on-login: a legacy SHA-256 record that verified gets transparently
+      // re-hashed with PBKDF2 and persisted, since we hold the plaintext here and
+      // this is the one flow that has it alongside a writable cfg.
+      if (verdict.legacy) {
+        await setPassword(cfg, password);
+        await writeConfig(env, mac, cfg);
       }
       // Successful login clears the lockout counter.
       await env.CONFIG.delete(lockKey);
@@ -596,7 +664,7 @@ async function handle(req, env) {
       const password = (f.get("password") || "").toString();
       const confirm = (f.get("confirm") || "").toString();
       if (!mac) return redirect("/signup?e=mac");
-      if (!password || password.length < 4) return redirect(`/signup?mac=${encodeURIComponent(mac)}&e=short`);
+      if (!password || password.length < 8) return redirect(`/signup?mac=${encodeURIComponent(mac)}&e=short`);
       if (password !== confirm) return redirect(`/signup?mac=${encodeURIComponent(mac)}&e=mismatch`);
       const cfg = await readConfig(env, mac);
       if (cfg.passwordHash) return redirect(`/signup?mac=${encodeURIComponent(mac)}&e=taken`);
@@ -632,7 +700,7 @@ async function handle(req, env) {
       const form = await requireCsrf(req, env);
       if (!form) return json({ error: "csrf" }, { status: 403 });
       const password = (form.get("password") || "").toString();
-      if (password && password.length < 4) return redirect("/?e=short");
+      if (password && password.length < 8) return redirect("/?e=short");
       const cfg = await readConfig(env, me);
       await setPassword(cfg, password);
       await writeConfig(env, me, cfg);
@@ -771,7 +839,7 @@ const loginErrors = {
 };
 const signupErrors = {
   mac: "Adresse MAC invalide (12 chiffres hex).",
-  short: "Mot de passe trop court (4 caractères minimum).",
+  short: "Mot de passe trop court (8 caractères minimum).",
   mismatch: "Les deux mots de passe ne correspondent pas.",
   taken: "Ce MAC a déjà un compte — utilise la page de connexion.",
   claim: "Ce MAC existe sans mot de passe — finis la configuration ici pour le protéger.",
@@ -808,10 +876,10 @@ function signupPage({ mac, err }) {
   <form method="post" action="/signup" style="margin-top:12px;">
     <label>Adresse MAC de l'appareil <span class="muted">(visible dans l'app, écran Réglages)</span></label>
     <input name="mac" placeholder="aa:bb:cc:dd:ee:ff" required pattern="^[0-9a-fA-F:\\-]{12,17}$" value="${escape(mac || "")}" />
-    <label>Mot de passe <span class="muted">(4 caractères minimum)</span></label>
-    <input name="password" type="password" autocomplete="new-password" required minlength="4" />
+    <label>Mot de passe <span class="muted">(8 caractères minimum)</span></label>
+    <input name="password" type="password" autocomplete="new-password" required minlength="8" />
     <label>Confirmer le mot de passe</label>
-    <input name="confirm" type="password" required minlength="4" />
+    <input name="confirm" type="password" required minlength="8" />
     <div class="row" style="margin-top:16px; justify-content:space-between;">
       <button type="submit">Créer le compte</button>
       <a href="/login" style="font-size:13px;">← J'ai déjà un compte</a>
@@ -822,7 +890,7 @@ function signupPage({ mac, err }) {
 }
 
 const dashboardErrors = {
-  short: "Mot de passe trop court (4 caractères minimum).",
+  short: "Mot de passe trop court (8 caractères minimum).",
   nopw: "Définis d'abord un mot de passe de compte avant de protéger les lectures.",
 };
 

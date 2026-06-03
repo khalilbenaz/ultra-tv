@@ -42,8 +42,9 @@ under "Cloudflare Worker URL".
 
 1. User opens the Worker URL → **`/login`** or **`/signup`**.
 2. Signup form takes the device's **MAC address** (visible in the Ultra TV
-   app under Settings) and a **password** (≥ 4 chars). Storing creates a KV
-   entry keyed by the normalised MAC with a salted SHA-256 password hash.
+   app under Settings) and a **password** (≥ 8 chars). Storing creates a KV
+   entry keyed by the normalised MAC with a salted PBKDF2-SHA256 password hash
+   (see [Password storage](#password-storage)).
 3. Signed in, the dashboard shows only **that one MAC's** providers. The user
    adds Xtream / M3U / Stalker entries, then opens the Ultra TV app, goes to
    Settings → "Config password" and enters the same password.
@@ -86,11 +87,38 @@ des lectures"). When enabled, `GET /api/config/:mac` requires `?password=…`
 (verified against the stored hash) and returns `401` otherwise. It requires a
 per-MAC password to be set first, and defaults to **off** (existing behavior).
 
+## Password storage
+
+Account passwords are stored as a salted **PBKDF2-SHA256** hash with a
+per-record random salt (`randomSalt()`, 16 bytes hex). The stored value is
+self-describing:
+
+```
+pbkdf2$<iterations>$<hex-digest>
+```
+
+Default cost is **100 000 iterations** (`PBKDF2_ITERS`, the OWASP floor) deriving
+a 256-bit key over `"<salt>:<plaintext>"`. Embedding the iteration count means
+the cost can be raised later without invalidating older hashes — verification
+reads it back out of the record.
+
+**Backward compatibility / upgrade-on-login.** Older records stored a
+single-pass `sha256Hex(salt + ":" + plaintext)` (a bare 64-char hex string with
+no `pbkdf2$` prefix). `verifyPassword()` detects the format: PBKDF2 records are
+verified with PBKDF2, legacy records with the old SHA-256 scheme. When a **legacy**
+hash verifies successfully during `POST /login`, the worker transparently
+re-hashes the supplied plaintext with PBKDF2 (rotating to a fresh salt) and
+persists it — so accounts upgrade silently on their next login, with no user
+action. All final comparisons use a constant-time `timingSafeEqual`.
+
+The minimum password length is **8 characters**, enforced on signup and on
+password change.
+
 ## Provider JSON schema (stored in KV)
 
 ```json
 {
-  "passwordHash": "<sha256 of salt:plaintext>",
+  "passwordHash": "pbkdf2$100000$<hex digest of salt:plaintext> (legacy: bare sha256 hex)",
   "salt": "<16 random bytes hex>",
   "protectReads": false,
   "providers": [

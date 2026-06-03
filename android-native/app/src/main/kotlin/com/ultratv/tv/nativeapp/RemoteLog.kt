@@ -20,13 +20,17 @@ import java.util.concurrent.TimeUnit
  * can't afford to block the OS death dialog); events go to /api/event via a
  * background scope.
  *
- * Endpoint + token are baked into the APK so every install reports without
- * setup. Rotate them in lock-step with the worker secret.
+ * Endpoint + token come from BuildConfig (BuildConfig.LOG_URL / LOG_TOKEN),
+ * populated by Gradle from the ULTRA_LOG_URL / ULTRA_LOG_TOKEN property or env
+ * var, falling back to the historical production values (see app/build.gradle.kts).
+ * They are still embedded in the APK so every install reports without setup —
+ * BuildConfig just lets us override them at build time instead of editing
+ * source. Rotate them in lock-step with the worker secret.
  */
 object RemoteLog {
 
-    private const val WORKER_URL = "https://ultratv-config.khalilbenaz.workers.dev"
-    private const val TOKEN      = "f-w31zHuqg0ntBPRSJtOVEXGB55B9uv5"
+    private val WORKER_URL = BuildConfig.LOG_URL
+    private val TOKEN      = BuildConfig.LOG_TOKEN
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

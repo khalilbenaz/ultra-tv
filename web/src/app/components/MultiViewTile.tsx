@@ -4,10 +4,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { WebPlayerEngine } from "@player/PlayerEngine";
 import { useCurrentPrograms } from "@app/hooks/useCurrentPrograms";
-import type { Channel, StreamInfo } from "@domain/model";
+import type { Channel, Provider, StreamInfo } from "@domain/model";
 import { streamTypeFromUrl } from "@domain/model";
+import { resolveChannelUrl } from "@data/providers/xtream";
 
 interface Props {
+  provider: Provider | null;
   channels: Channel[];
   channel: Channel | null;
   onChange: (c: Channel | null) => void;
@@ -15,7 +17,7 @@ interface Props {
   onActivateAudio: () => void;
 }
 
-export function MultiViewTile({ channels, channel, onChange, audioActive, onActivateAudio }: Props) {
+export function MultiViewTile({ provider, channels, channel, onChange, audioActive, onActivateAudio }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const engineRef = useRef<WebPlayerEngine | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -36,19 +38,20 @@ export function MultiViewTile({ channels, channel, onChange, audioActive, onActi
   useEffect(() => {
     if (!engineRef.current) return;
     if (!channel) return;
+    const url = provider ? resolveChannelUrl(provider, channel) : channel.streamUrl;
     const stream: StreamInfo = {
-      url: channel.streamUrl,
+      url,
       title: channel.name,
       headers: {},
-      userAgent: null,
-      streamType: streamTypeFromUrl(channel.streamUrl),
+      userAgent: provider?.userAgent || null,
+      streamType: streamTypeFromUrl(url),
       containerExtension: null,
       catchUpUrl: null,
       expirationTime: null,
       drmInfo: null,
     };
     void engineRef.current.load(stream).then(() => engineRef.current?.play());
-  }, [channel]);
+  }, [channel, provider]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = !audioActive;

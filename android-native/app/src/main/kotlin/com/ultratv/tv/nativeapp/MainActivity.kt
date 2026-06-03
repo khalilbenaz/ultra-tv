@@ -313,7 +313,7 @@ private fun NavGraph(nav: androidx.navigation.NavHostController) {
         }
         composable(Routes.SEARCH) {
             SearchScreen(
-                onOpenChannel = { /* TODO: deep-link */ },
+                onOpenChannel = { url, title -> nav.navigate(Routes.player(url, title)) },
                 onOpenMovie = { id -> nav.navigate(Routes.movieDetail(id)) },
                 onOpenSeries = { id -> nav.navigate(Routes.seriesDetail(id)) },
             )

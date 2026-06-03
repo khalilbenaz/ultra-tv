@@ -255,7 +255,7 @@ Recently landed:
 
 Ultra TV — original work by [khalilbenaz](https://github.com/khalilbenaz). MIT-licensed.
 
-The native Android TV codebase supersedes the earlier Capacitor WebView build (kept under `android-app/` and `web/` for historical reference) — Compose-TV's focus tree gave reliable D-pad navigation on every box we tested, including the Mecool KM7 Plus where the WebView bridge approach struggled.
+The native Android TV codebase supersedes the earlier Capacitor WebView build (kept under `android-app/` and `web/` for historical reference — legacy, no releases produced from it, see [`android-app/README.md`](android-app/README.md)) — Compose-TV's focus tree gave reliable D-pad navigation on every box we tested, including the Mecool KM7 Plus where the WebView bridge approach struggled.
 
 If you fork / repackage, please keep the credit visible in the About screen.
 

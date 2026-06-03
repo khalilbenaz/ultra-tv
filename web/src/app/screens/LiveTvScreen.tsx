@@ -13,6 +13,7 @@ import { useI18n } from "@app/i18n";
 import { useDebounced } from "@app/hooks/useDebounced";
 import type { Channel, Provider, StreamInfo } from "@domain/model";
 import { streamTypeFromUrl } from "@domain/model";
+import { resolveChannelUrl } from "@data/providers/xtream";
 
 export function LiveTvScreen() {
   const providerId = useProviderStore((s) => s.activeProviderId);
@@ -67,12 +68,13 @@ export function LiveTvScreen() {
     if (!selected) return null;
     const headers: Record<string, string> = {};
     if (provider?.httpReferer) headers["Referer"] = provider.httpReferer;
+    const url = provider ? resolveChannelUrl(provider, selected) : selected.streamUrl;
     return {
-      url: selected.streamUrl,
+      url,
       title: selected.name,
       headers,
       userAgent: provider?.userAgent || null,
-      streamType: streamTypeFromUrl(selected.streamUrl),
+      streamType: streamTypeFromUrl(url),
       containerExtension: null,
       catchUpUrl: null,
       expirationTime: null,

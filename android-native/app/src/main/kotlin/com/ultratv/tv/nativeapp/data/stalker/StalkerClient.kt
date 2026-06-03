@@ -50,6 +50,37 @@ class StalkerClient @Inject constructor(private val ok: OkHttpClient) {
 
     data class Session(val token: String, val portalRoot: String)
 
+    // --- Session cache ------------------------------------------------------
+    // The Stalker handshake (MAC → token) used to run on every zap because
+    // resolvePlayUrl() called handshake() each time. The token is valid for the
+    // whole portal session, so we cache it per provider with a short TTL and
+    // reuse it across create_link calls. On a 401 / handshake failure we drop
+    // the cached entry and force a fresh handshake (see cachedHandshake()).
+    private data class CachedSession(val session: Session, val createdAtMs: Long)
+
+    private val sessionCache = java.util.concurrent.ConcurrentHashMap<Long, CachedSession>()
+
+    private val sessionTtlMs = 5 * 60 * 1000L // 5 minutes
+
+    /** Drops the cached token for a provider so the next call re-handshakes. */
+    private fun invalidateSession(providerId: Long) {
+        sessionCache.remove(providerId)
+    }
+
+    /**
+     * Returns a cached [Session] for the provider if it's still within the TTL,
+     * otherwise performs a fresh handshake and caches it. Used by the per-zap
+     * play path so we don't re-handshake on every channel change.
+     */
+    private suspend fun cachedHandshake(p: ProviderEntity): Session {
+        val now = System.currentTimeMillis()
+        sessionCache[p.id]?.let { cached ->
+            if (now - cached.createdAtMs < sessionTtlMs) return cached.session
+        }
+        // Stale or absent — handshake() repopulates the cache itself.
+        return handshake(p)
+    }
+
     suspend fun handshake(p: ProviderEntity): Session = withContext(Dispatchers.IO) {
         val portal = portalRoot(p.baseUrl)
         val url = "$portal/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
@@ -59,7 +90,11 @@ class StalkerClient @Inject constructor(private val ok: OkHttpClient) {
             ?: error("Stalker handshake failed (no token). Check URL and MAC.")
         // Some portals require a profile fetch right after handshake.
         runCatching { call("$portal/portal.php?type=stb&action=get_profile&token=$token", p, token) }
-        Session(token = token, portalRoot = portal)
+        // Cache so a subsequent zap (resolvePlayUrl) reuses this token instead
+        // of re-handshaking. cachedHandshake()/resolvePlayUrl read this entry.
+        Session(token = token, portalRoot = portal).also {
+            sessionCache[p.id] = CachedSession(it, System.currentTimeMillis())
+        }
     }
 
     suspend fun fetchLiveCategories(p: ProviderEntity, s: Session): List<CategoryEntity> = runCatching {
@@ -261,18 +296,30 @@ class StalkerClient @Inject constructor(private val ok: OkHttpClient) {
     suspend fun resolvePlayUrl(p: ProviderEntity, channelStreamUrl: String): String =
         withContext(Dispatchers.IO) {
             val cmd = channelStreamUrl.removePrefix("stalker://")
-            val s = handshake(p)
             val encoded = java.net.URLEncoder.encode(cmd, "UTF-8")
-            val body = call(
-                "${s.portalRoot}/portal.php?type=itv&action=create_link&cmd=$encoded&JsHttpRequest=1-xml",
-                p, s.token,
-            )
-            val raw = (json.parseToJsonElement(body) as? JsonObject)
-                ?.get("js")?.jsonObject?.get("cmd")?.jsonPrimitive?.contentOrNull
-                ?: error("Stalker create_link returned no URL")
-            // create_link typically returns "ffrt http://1.2.3.4/iptv/..." — strip the prefix.
-            raw.substringAfter(' ', raw)
+            // First try with the cached session token; if create_link fails
+            // (expired token → HTTP 401 or empty/garbage body) drop the cache
+            // and retry once with a fresh handshake.
+            runCatching { createLink(p, encoded, cachedHandshake(p)) }
+                .getOrElse {
+                    // Likely an expired token (create_link → HTTP 401 / no URL).
+                    // Force a fresh handshake (which re-caches) and retry once.
+                    invalidateSession(p.id)
+                    createLink(p, encoded, handshake(p))
+                }
         }
+
+    private suspend fun createLink(p: ProviderEntity, encodedCmd: String, s: Session): String {
+        val body = call(
+            "${s.portalRoot}/portal.php?type=itv&action=create_link&cmd=$encodedCmd&JsHttpRequest=1-xml",
+            p, s.token,
+        )
+        val raw = (json.parseToJsonElement(body) as? JsonObject)
+            ?.get("js")?.jsonObject?.get("cmd")?.jsonPrimitive?.contentOrNull
+            ?: error("Stalker create_link returned no URL")
+        // create_link typically returns "ffrt http://1.2.3.4/iptv/..." — strip the prefix.
+        return raw.substringAfter(' ', raw)
+    }
 
     // ---- Helpers ----
 

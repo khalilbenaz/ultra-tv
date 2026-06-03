@@ -6,7 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { historyRepo, movieRepo, providerRepo } from "@data/db/repositories";
-import { xtream } from "@data/providers/xtream";
+import { xtream, resolveMovieUrl } from "@data/providers/xtream";
 import { PlayerWithControls } from "@app/components/PlayerWithControls";
 import { ProxyImg } from "@app/components/ProxyImg";
 import { FavoriteButton } from "@app/components/FavoriteButton";
@@ -18,6 +18,7 @@ export function MovieDetailScreen() {
   const { id } = useParams();
   const movieId = Number(id);
   const movie = useLiveQuery(() => movieRepo.get(movieId), [movieId]);
+  const provider = useLiveQuery(async () => movie ? await providerRepo.get(movie.providerId) : undefined, [movie?.providerId]);
   const history = useLiveQuery(async () => {
     if (!movie) return undefined;
     return await historyRepo.byContent(movie.providerId, movieId);
@@ -73,18 +74,19 @@ export function MovieDetailScreen() {
 
   const stream: StreamInfo | null = useMemo(() => {
     if (!movie || !playing) return null;
+    const url = provider ? resolveMovieUrl(provider, movie) : movie.streamUrl;
     return {
-      url: movie.streamUrl,
+      url,
       title: movie.name,
       headers: {},
-      userAgent: null,
+      userAgent: provider?.userAgent || null,
       streamType: streamTypeFromExtension(movie.containerExtension),
       containerExtension: movie.containerExtension,
       catchUpUrl: null,
       expirationTime: null,
       drmInfo: null,
     };
-  }, [movie, playing]);
+  }, [movie, playing, provider]);
 
   if (!movie) return <div className="empty">Loading…</div>;
   const resumeMs = history?.resumePositionMs ?? 0;

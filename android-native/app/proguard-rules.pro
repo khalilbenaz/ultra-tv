@@ -30,7 +30,7 @@
 # Media3 uses some service loader patterns.
 -keepnames class androidx.media3.** { *; }
 
-# OkHttp + Retrofit (used by Xtream/Stalker/M3U/RemoteConfig)
+# OkHttp (used by Xtream/Stalker/M3U/RemoteConfig — hand-rolled clients, no Retrofit)
 -dontwarn okhttp3.internal.platform.**
 -dontwarn org.conscrypt.**
 -dontwarn org.openjsse.**

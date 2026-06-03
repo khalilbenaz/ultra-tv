@@ -1,18 +1,20 @@
 // Ultra TV — Electron shell.
 //
 // Why Electron exists here: the browser can't decode HEVC / AC3 / EAC3 / MKV that
-// many IPTV providers serve. Electron bundles Chromium with native codecs enabled
-// (proprietary codecs available in unofficial Electron builds, or via system
-// FFmpeg on Linux). We also strip CORS so the app can hit any upstream directly —
-// no Cloudflare/Vercel proxy needed.
+// many IPTV providers serve. Stock Electron ships a stripped Chromium WITHOUT
+// these proprietary codecs, so we depend on the `@castlabs/electron-releases`
+// fork (see electron/README.md) which bundles a full-codec Chromium + Widevine.
+// We also strip CORS so the app can hit any upstream directly — no
+// Cloudflare/Vercel proxy needed.
 
 const { app, BrowserWindow, session, shell } = require("electron");
 const path = require("node:path");
 const url = require("node:url");
 
-// Force-enable extra command-line codecs where supported. Has no effect on
-// codecs the underlying Chromium doesn't ship — for full HEVC support use the
-// `@castlabs/electron-releases` fork.
+// Opt into platform/GPU HEVC hardware decode paths. With the castlabs fork the
+// HEVC decoder is already present; this flag just nudges Chromium to prefer the
+// OS/GPU decoder where available. Harmless no-op on builds/platforms that lack
+// it — kept because it costs nothing and helps HW accel on Windows/macOS.
 app.commandLine.appendSwitch("enable-features", "PlatformHEVCDecoderSupport");
 // NOTE: ignore-certificate-errors is a Chromium command-line switch and is
 // therefore process-global by nature — it cannot be scoped per-request. Many

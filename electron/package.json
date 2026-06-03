@@ -8,12 +8,14 @@
     "dev": "cross-env SV_DEV=1 electron .",
     "package:mac": "npm run build:web && electron-builder --mac",
     "package:win": "npm run build:web && electron-builder --win",
-    "package:linux": "npm run build:web && electron-builder --linux"
+    "package:linux": "npm run build:web && electron-builder --linux",
+    "icons": "electron-icon-builder --input=../docs/redesign/logo.svg --output=./build --flatten"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron": "github:castlabs/electron-releases#v33.4.11+wvcus",
+    "electron-builder": "^25.1.8",
+    "electron-icon-builder": "^2.0.1"
   },
   "build": {
     "appId": "com.ultratv.desktop",

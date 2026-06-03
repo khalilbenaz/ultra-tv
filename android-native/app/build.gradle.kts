@@ -7,6 +7,40 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Single source of truth for the app version: the top-level VERSION file
+// (repo root). versionName is read verbatim ("x.y.z") and versionCode is
+// DERIVED deterministically as major*10000 + minor*100 + patch. This matches
+// the packed-int scheme UpdateChecker.kt uses to compare GitHub release tags,
+// so the in-app updater and the build stay in lockstep with one edit.
+// 1.0.29 → versionName "1.0.29", versionCode 10029 (> the legacy code 39, so
+// installs over existing builds stay monotonic).
+val versionFile = rootProject.file("../VERSION")
+val appVersionName: String = versionFile.readText().trim()
+val appVersionCode: Int = run {
+    val parts = appVersionName.split(".").map { it.trim().toInt() }
+    require(parts.size >= 3) { "VERSION must be x.y.z, got '$appVersionName'" }
+    parts[0] * 10_000 + parts[1] * 100 + parts[2]
+}
+
+// Remote-telemetry endpoint + token. Previously hardcoded as consts inside
+// RemoteLog.kt and baked into the APK. They are now BuildConfig fields so the
+// values can be overridden per build without touching source — via a Gradle
+// property (-PULTRA_LOG_URL=... / gradle.properties) or an environment variable
+// (ULTRA_LOG_URL / ULTRA_LOG_TOKEN). The defaults below are the historical
+// production values, so a plain local/CI build behaves exactly as before.
+// Rotate these in lock-step with the worker secret.
+fun resolveBuildConfigValue(name: String, default: String): String =
+    (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: default
+
+val ultraLogUrl = resolveBuildConfigValue(
+    "ULTRA_LOG_URL", "https://ultratv-config.khalilbenaz.workers.dev",
+)
+val ultraLogToken = resolveBuildConfigValue(
+    "ULTRA_LOG_TOKEN", "f-w31zHuqg0ntBPRSJtOVEXGB55B9uv5",
+)
+
 android {
     namespace = "com.ultratv.tv.nativeapp"
     compileSdk = 35
@@ -17,9 +51,14 @@ android {
         applicationId = "com.ultratv.tv.nativeapp"
         minSdk = 28
         targetSdk = 35
-        versionCode = 39
-        versionName = "1.0.29"
+        versionCode = appVersionCode
+        versionName = appVersionName
         vectorDrawables { useSupportLibrary = true }
+
+        // Telemetry transport config — see resolveBuildConfigValue() above.
+        // Consumed by RemoteLog. String values must be wrapped in escaped quotes.
+        buildConfigField("String", "LOG_URL", "\"$ultraLogUrl\"")
+        buildConfigField("String", "LOG_TOKEN", "\"$ultraLogToken\"")
     }
 
     // Release signing — reads ULTRA_KEYSTORE / ULTRA_KEYSTORE_PASSWORD /
@@ -175,8 +214,6 @@ dependencies {
 
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.kotlinx.serialization)
 
     // Tests — runs on the local JVM with Robolectric for Android types we
     // can't easily strip out (android.util.Base64).

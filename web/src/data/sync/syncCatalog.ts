@@ -165,7 +165,8 @@ export async function syncXtreamCatalog(
     groupTitle: null,
     categoryId: Number.parseInt(s.category_id, 10) || null,
     categoryName: null,
-    streamUrl: xtream.liveStreamUrl(creds, s.stream_id),
+    // M-3: do not persist credentialed URL — rebuilt at play time from streamId.
+    streamUrl: "",
     epgChannelId: s.epg_channel_id,
     number: s.num,
     isFavorite: false,
@@ -214,7 +215,8 @@ export async function syncXtreamCatalog(
           backdropUrl: null,
           categoryId: Number.parseInt(m.category_id, 10) + 1_000_000 || null,
           categoryName: cat.category_name,
-          streamUrl: xtream.vodStreamUrl(creds, m.stream_id, m.container_extension || "mp4"),
+          // M-3: rebuilt at play time from streamId + containerExtension.
+          streamUrl: "",
           containerExtension: m.container_extension || null,
           plot: null,
           cast: null,
@@ -324,7 +326,8 @@ export async function loadSeriesEpisodes(provider: Provider, seriesId: number): 
         title: e.title ?? `Episode ${e.episode_num ?? 0}`,
         episodeNumber: e.episode_num ?? 0,
         seasonNumber,
-        streamUrl: xtream.seriesEpisodeUrl(creds, Number.parseInt(e.id, 10), e.container_extension || "mp4"),
+        // M-3: rebuilt at play time from episodeId + containerExtension.
+        streamUrl: "",
         containerExtension: e.container_extension ?? null,
         coverUrl: e.info?.movie_image ?? null,
         plot: e.info?.plot ?? null,

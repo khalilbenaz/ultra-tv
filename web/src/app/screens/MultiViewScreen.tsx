@@ -9,6 +9,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useState } from "react";
 import { channelRepo } from "@data/db/repositories";
 import { useProviderStore } from "@app/stores/providers";
+import { useActiveProvider } from "@app/hooks/useActiveProvider";
 import { useUiStore, type MultiViewLayout } from "@app/stores/ui";
 import { MultiViewTile } from "@app/components/MultiViewTile";
 import { CategoryFilter } from "@app/components/CategoryFilter";
@@ -23,6 +24,7 @@ const SLOT_COUNT: Record<MultiViewLayout, number> = {
 
 export function MultiViewScreen() {
   const providerId = useProviderStore((s) => s.activeProviderId);
+  const provider = useActiveProvider();
   const layout = useUiStore((s) => s.multiViewLayout);
   const setLayout = useUiStore((s) => s.setMultiViewLayout);
 
@@ -78,6 +80,7 @@ export function MultiViewScreen() {
         {activeSlots.map((c, idx) => (
           <MultiViewTile
             key={idx}
+            provider={provider ?? null}
             channels={channels ?? []}
             channel={c}
             onChange={(nc) => setSlot(idx, nc)}
