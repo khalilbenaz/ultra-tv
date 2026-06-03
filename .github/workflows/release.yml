@@ -37,8 +37,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # ubuntu-latest ships a preinstalled Android SDK; the flaky
+      # android-actions/setup-android action (emulator download) is avoided.
 
       - name: Setup Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
@@ -76,6 +76,7 @@ jobs:
           ULTRA_KEY_PASSWORD: ${{ secrets.ULTRA_KEY_PASSWORD }}
           ULTRA_LINEAGE: ${{ steps.signing.outputs.lineage }}
         run: |
+          chmod +x gradlew
           if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
             ./gradlew assembleRelease resignRelease --console=plain --stacktrace
           else
