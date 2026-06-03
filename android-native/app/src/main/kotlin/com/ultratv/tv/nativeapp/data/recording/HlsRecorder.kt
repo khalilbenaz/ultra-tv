@@ -30,7 +30,15 @@ class HlsRecorder(
 ) {
     suspend fun run(): Boolean {
         outFile.parentFile?.mkdirs()
-        val seenSegments = mutableSetOf<String>()
+        // Dedupe by absolute HLS media-sequence number, NOT by segment URI.
+        // Sliding live playlists recycle segment file names (seg00.ts, seg01.ts,
+        // …) so a URI-keyed set both leaks memory unboundedly and wrongly skips
+        // a *new* segment that happens to reuse an old name (causing gaps).
+        // #EXT-X-MEDIA-SEQUENCE is the sequence number of the first segment in
+        // the current playlist; segment N's absolute sequence is
+        // mediaSequence + N. We just track the highest sequence we've written
+        // and append anything beyond it — O(1) memory regardless of duration.
+        var lastWrittenSeq = -1L
         var totalBytes = 0L
         val startMs = System.currentTimeMillis()
         var lastNewSegmentMs = startMs
@@ -42,21 +50,23 @@ class HlsRecorder(
                 val elapsed = System.currentTimeMillis() - startMs
                 if (elapsed >= maxDurationMs) return true
 
-                val (segments, td) = try {
+                val manifest = try {
                     fetchManifest(sourceM3u8)
                 } catch (_: Throwable) {
                     delay((targetSec * 1000).toLong())
                     continue
                 }
-                if (td > 0) targetSec = td
+                val segments = manifest.segments
+                if (manifest.targetDuration > 0) targetSec = manifest.targetDuration
 
                 var sawNew = false
-                for (seg in segments) {
+                segments.forEachIndexed { idx, seg ->
                     if (shouldStop() || System.currentTimeMillis() - startMs >= maxDurationMs) {
                         return true
                     }
-                    if (seg in seenSegments) continue
-                    seenSegments.add(seg)
+                    val seq = manifest.mediaSequence + idx
+                    if (seq <= lastWrittenSeq) return@forEachIndexed
+                    lastWrittenSeq = seq
                     sawNew = true
                     lastNewSegmentMs = System.currentTimeMillis()
                     runCatching {
@@ -86,7 +96,15 @@ class HlsRecorder(
         }
     }
 
-    private fun fetchManifest(url: String): Pair<List<String>, Double> {
+    /** Parsed live playlist: ordered segment URLs plus the playlist-level
+     *  #EXT-X-MEDIA-SEQUENCE (sequence of segments[0]) and #EXT-X-TARGETDURATION. */
+    private data class Manifest(
+        val segments: List<String>,
+        val mediaSequence: Long,
+        val targetDuration: Double,
+    )
+
+    private fun fetchManifest(url: String): Manifest {
         val req = Request.Builder().url(url).build()
         val text = ok.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) error("manifest HTTP ${resp.code}")
@@ -94,12 +112,15 @@ class HlsRecorder(
         }
         val segments = mutableListOf<String>()
         var targetDuration = 0.0
+        var mediaSequence = 0L   // defaults to 0 when the tag is absent (per RFC 8216)
         val base = URI.create(url)
         var lastWasExtinf = false
         for (raw in text.lineSequence()) {
             val line = raw.trim()
             if (line.startsWith("#EXT-X-TARGETDURATION")) {
                 targetDuration = line.substringAfter(":").toDoubleOrNull() ?: targetDuration
+            } else if (line.startsWith("#EXT-X-MEDIA-SEQUENCE")) {
+                mediaSequence = line.substringAfter(":").trim().toLongOrNull() ?: mediaSequence
             } else if (line.startsWith("#EXTINF")) {
                 lastWasExtinf = true
             } else if (line.isNotBlank() && !line.startsWith("#")) {
@@ -110,6 +131,6 @@ class HlsRecorder(
                 }
             }
         }
-        return segments to targetDuration
+        return Manifest(segments, mediaSequence, targetDuration)
     }
 }

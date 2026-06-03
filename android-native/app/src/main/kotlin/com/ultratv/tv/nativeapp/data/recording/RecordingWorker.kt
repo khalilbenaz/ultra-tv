@@ -13,6 +13,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.IOException
+import java.io.InterruptedIOException
 
 /**
  * Downloads a recording. Dispatches by URL type:
@@ -42,22 +44,40 @@ class RecordingWorker @AssistedInject constructor(
             val file = File(r.filePath).apply { parentFile?.mkdirs() }
             try {
                 dao.updateProgress(id, "running", 0, 0, null, null)
-                if (r.sourceUrl.contains(".m3u8", ignoreCase = true)) {
+                val cancelled = if (r.sourceUrl.contains(".m3u8", ignoreCase = true)) {
                     runHls(id, r.sourceUrl, file, maxDurationMs)
                 } else {
                     runHttp(id, r.sourceUrl, file)
                 }
-                dao.updateProgress(id, "done", file.length(), file.length(), null, System.currentTimeMillis())
-                Result.success()
+                // The download path may have short-circuited on user cancel and
+                // already written the "cancelled" status — don't clobber it with
+                // "done".
+                if (cancelled) {
+                    Result.success()
+                } else {
+                    dao.updateProgress(id, "done", file.length(), file.length(), null, System.currentTimeMillis())
+                    Result.success()
+                }
             } catch (t: Throwable) {
-                dao.updateProgress(id, "failed", file.length(), 0, t.message, System.currentTimeMillis())
-                Result.retry()
+                // Distinguish transient I/O hiccups (worth a WorkManager retry)
+                // from terminal errors (bad playlist, 404, disk full) that will
+                // never succeed on retry — surface those as "error".
+                if (t is IOException || t is InterruptedIOException) {
+                    dao.updateProgress(id, "failed", file.length(), 0, t.message, System.currentTimeMillis())
+                    Result.retry()
+                } else {
+                    dao.updateProgress(id, "error", file.length(), 0, t.message, System.currentTimeMillis())
+                    Result.failure()
+                }
             }
         }
     }
 
-    private suspend fun runHttp(id: Long, url: String, file: File) {
+    /** Returns true if the download was cancelled (status already written). */
+    private suspend fun runHttp(id: Long, url: String, file: File): Boolean {
         val resp = ok.newCall(Request.Builder().url(url).build()).execute()
+        // Non-2xx is terminal (404/410/invalid) — IllegalStateException maps to
+        // Result.failure() in doWork, not a retry.
         if (!resp.isSuccessful) error("HTTP ${resp.code}")
         val total = resp.body?.contentLength() ?: -1L
         var down = 0L
@@ -69,7 +89,7 @@ class RecordingWorker @AssistedInject constructor(
                 while (input.read(buf).also { n = it } > 0) {
                     if (isStopped) {
                         dao.updateProgress(id, "cancelled", down, total, "Cancelled", System.currentTimeMillis())
-                        return
+                        return true
                     }
                     out.write(buf, 0, n)
                     down += n
@@ -81,9 +101,11 @@ class RecordingWorker @AssistedInject constructor(
                 }
             }
         }
+        return false
     }
 
-    private suspend fun runHls(id: Long, url: String, file: File, maxDurationMs: Long) {
+    /** Returns true if recording was cancelled (status already written). */
+    private suspend fun runHls(id: Long, url: String, file: File, maxDurationMs: Long): Boolean {
         val recorder = HlsRecorder(
             ok = ok,
             sourceM3u8 = url,
@@ -96,7 +118,15 @@ class RecordingWorker @AssistedInject constructor(
                 runBlocking { dao.updateProgress(id, "running", bytes, 0, null, null) }
             },
         )
-        recorder.run()
+        // HlsRecorder.run() returns false when it stopped due to a cancel
+        // request; in that case mark the row cancelled so doWork doesn't write
+        // "done" over it. true means it ran to completion / max duration.
+        val completed = recorder.run()
+        if (!completed) {
+            dao.updateProgress(id, "cancelled", file.length(), 0, "Cancelled", System.currentTimeMillis())
+            return true
+        }
+        return false
     }
 
     companion object {

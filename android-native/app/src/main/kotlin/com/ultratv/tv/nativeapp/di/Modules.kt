@@ -22,7 +22,13 @@ object DatabaseModule {
     @Provides @Singleton
     fun provideDb(@ApplicationContext ctx: Context): UltraDb =
         Room.databaseBuilder(ctx, UltraDb::class.java, "ultra-tv.db")
-            .fallbackToDestructiveMigration()
+            // Versions 1..9 predate schema export; there are no Migration objects
+            // for them, so we wipe-and-rebuild when upgrading from any of them.
+            // FUTURE: any bump past 10 MUST ship an explicit Migration and be
+            // registered here via .addMigrations(MIGRATION_10_11, ...). Do NOT
+            // widen this destructive range — the exported schemas under
+            // app/schemas let Room auto-generate / verify those migrations.
+            .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8, 9)
             .build()
 
     @Provides fun provideProviderDao(db: UltraDb): ProviderDao = db.providerDao()

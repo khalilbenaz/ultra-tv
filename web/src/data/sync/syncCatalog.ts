@@ -26,6 +26,7 @@ import {
   seriesRepo,
   settingsRepo,
 } from "@data/db/repositories";
+import { buildCategoryFilter, filterCategoriesByWhitelist, MOVIE_ID_OFFSET, SERIES_ID_OFFSET } from "@data/sync/filterCategories";
 
 interface XtreamSeriesInfo {
   info?: {
@@ -189,13 +190,11 @@ export async function syncXtreamCatalog(
   // Respect Settings → Categories whitelist. Null = include everything (first sync).
   const movieWhitelist = await settingsRepo.get<number[]>(`filters:${provider.id}:MOVIE`);
   const seriesWhitelist = await settingsRepo.get<number[]>(`filters:${provider.id}:SERIES`);
-  const movieFilter = movieWhitelist ? new Set(movieWhitelist.map((id) => id - 1_000_000)) : null;
-  const seriesFilter = seriesWhitelist ? new Set(seriesWhitelist.map((id) => id - 2_000_000)) : null;
+  const movieFilter = buildCategoryFilter(movieWhitelist, MOVIE_ID_OFFSET);
+  const seriesFilter = buildCategoryFilter(seriesWhitelist, SERIES_ID_OFFSET);
 
-  const targetedVodCats = movieFilter ? vodCats.filter((c) => movieFilter.has(Number.parseInt(c.category_id, 10))) : vodCats;
-  const targetedSeriesCats = seriesFilter ? vodCats : seriesCats;
-  const effectiveSeriesCats = seriesFilter ? seriesCats.filter((c) => seriesFilter.has(Number.parseInt(c.category_id, 10))) : seriesCats;
-  void targetedSeriesCats;
+  const targetedVodCats = filterCategoriesByWhitelist(vodCats, movieFilter);
+  const effectiveSeriesCats = filterCategoriesByWhitelist(seriesCats, seriesFilter);
 
   // Movies — per-category to keep response size manageable for large providers.
   let movieCursor = 0;

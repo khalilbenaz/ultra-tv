@@ -10,7 +10,9 @@
 // upstream returns 403/code:1003 — we surface it as a clearer error.
 //
 // Usage: GET /?target=<URL-encoded>  with optional X-SV-UA / X-SV-Referer.
-// Optional ALLOWED_HOSTS env: comma-separated upstream hostnames.
+// REQUIRED ALLOWED_HOSTS env: comma-separated upstream hostnames. The proxy is
+// default-deny — if ALLOWED_HOSTS is unset/empty it refuses all traffic with a
+// 403 so the Worker can't be abused as an open relay.
 
 const REALISTIC_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
@@ -33,11 +35,15 @@ export default {
       return json({ error: "Invalid target URL" }, 400);
     }
 
-    if (env.ALLOWED_HOSTS) {
-      const allowed = env.ALLOWED_HOSTS.split(",").map((h) => h.trim()).filter(Boolean);
-      if (!allowed.includes(upstream.hostname)) {
-        return json({ error: `Host ${upstream.hostname} not in ALLOWED_HOSTS` }, 403);
-      }
+    // Default-deny: never act as an open relay. ALLOWED_HOSTS must be set.
+    const allowed = (env.ALLOWED_HOSTS || "").split(",").map((h) => h.trim()).filter(Boolean);
+    if (allowed.length === 0) {
+      return json({
+        error: "Proxy not configured: ALLOWED_HOSTS is unset. Operator must set the ALLOWED_HOSTS var (comma-separated upstream hostnames) before this proxy will forward any request.",
+      }, 403);
+    }
+    if (!allowed.includes(upstream.hostname)) {
+      return json({ error: `Host ${upstream.hostname} not in ALLOWED_HOSTS` }, 403);
     }
 
     const ua = request.headers.get("x-sv-ua") || REALISTIC_UA;

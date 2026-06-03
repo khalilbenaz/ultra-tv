@@ -50,7 +50,15 @@ function json(body, init = {}) {
 function html(body, init = {}) {
   return new Response(body, {
     status: init.status ?? 200,
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      // Keep the crash/event viewer's ?token= out of Referer headers, and stop
+      // browsers from MIME-sniffing these HTML responses into anything else.
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      ...(init.headers || {}),
+    },
   });
 }
 
@@ -68,8 +76,29 @@ function normaliseMac(raw) {
 }
 
 function sessionSecret(env) {
-  // Prefer a dedicated secret; fall back so existing deployments keep working.
-  return env.SESSION_SECRET || env.ADMIN_PASSWORD || "ultra-tv-default-rotate-me";
+  // Prefer a dedicated secret; fall back to ADMIN_PASSWORD so existing
+  // deployments keep working. Fail closed: if neither is configured we refuse
+  // to sign/verify with a guessable constant — callers turn this into a 500.
+  const s = env.SESSION_SECRET || env.ADMIN_PASSWORD;
+  if (!s) throw new ConfigError("SESSION_SECRET (or ADMIN_PASSWORD) not configured");
+  return s;
+}
+
+// Thrown by sessionSecret() when no signing secret is configured.
+class ConfigError extends Error {}
+
+/**
+ * Constant-time string compare. Avoids leaking how many leading chars matched
+ * via early-return timing. Length check first (lengths aren't secret), then
+ * XOR-accumulate over char codes so the loop runs the full length regardless.
+ */
+function timingSafeEqual(a, b) {
+  a = String(a == null ? "" : a);
+  b = String(b == null ? "" : b);
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 // ---- Session (signed cookie) -----------------------------------------------
@@ -101,7 +130,7 @@ async function verifySession(value, env) {
   const [mac, exp, sig] = parts;
   if (Date.now() > parseInt(exp, 10)) return null;
   const want = await hmac(sessionSecret(env), `${mac}.${exp}`);
-  if (want !== sig) return null;
+  if (!timingSafeEqual(want, sig)) return null;
   return normaliseMac(mac);
 }
 
@@ -140,7 +169,7 @@ async function requireCsrf(req, env) {
   const want = await csrfFor(req, env);
   if (!want) return null;
   const f = await req.formData();
-  return if_then_else(f.get("csrf") === want, f, null);
+  return if_then_else(timingSafeEqual((f.get("csrf") || "").toString(), want), f, null);
 }
 function if_then_else(cond, a, b) { return cond ? a : b; }
 
@@ -164,6 +193,30 @@ async function writeConfig(env, mac, cfg) {
   await env.CONFIG.put(mac, JSON.stringify(cfg));
 }
 
+// ---- Login lockout helpers -------------------------------------------------
+
+/** Parse a `lk:<mac>` record; a corrupt/missing record is treated as no lock. */
+function parseLock(raw) {
+  if (!raw) return { fails: 0, locked: false, until: 0 };
+  try {
+    const v = JSON.parse(raw);
+    return { fails: v.fails || 0, locked: !!v.locked, until: v.until || 0 };
+  } catch {
+    return { fails: 0, locked: false, until: 0 };
+  }
+}
+
+const LOCKOUT_BASE_MS = 60_000;        // 60 s on the 5th failed attempt
+const LOCKOUT_CAP_MS = 60 * 60 * 1000; // capped at 1 hour
+const LOCKOUT_THRESHOLD = 5;
+
+/** Exponential backoff: 60 s on the 5th fail, doubling each extra fail, cap 1 h. */
+function lockoutBackoffMs(fails) {
+  if (fails < LOCKOUT_THRESHOLD) return 0;
+  const extra = fails - LOCKOUT_THRESHOLD; // 0,1,2,…
+  return Math.min(LOCKOUT_BASE_MS * 2 ** extra, LOCKOUT_CAP_MS);
+}
+
 // ---- Per-MAC password hashing ---------------------------------------------
 
 async function sha256Hex(input) {
@@ -184,13 +237,16 @@ async function passwordMatches(cfg, supplied) {
   if (!cfg.passwordHash) return true; // legacy / unprotected
   if (!supplied) return false;
   const computed = await sha256Hex(cfg.salt + ":" + supplied);
-  return computed === cfg.passwordHash;
+  return timingSafeEqual(computed, cfg.passwordHash);
 }
 
 async function setPassword(cfg, plaintext) {
   if (!plaintext) {
     delete cfg.passwordHash;
     delete cfg.salt;
+    // Read protection is meaningless without a password — clear it so the
+    // dashboard toggle doesn't render checked while the gate is inert.
+    delete cfg.protectReads;
     return;
   }
   cfg.salt = cfg.salt || randomSalt();
@@ -227,7 +283,7 @@ async function handleCrashPost(req, env) {
   const want = crashToken(env);
   const got = req.headers.get("x-crash-token") || "";
   if (!want) return json({ error: "crash reporting not configured" }, { status: 503 });
-  if (got !== want) return json({ error: "bad token" }, { status: 401 });
+  if (!timingSafeEqual(got, want)) return json({ error: "bad token" }, { status: 401 });
   let body;
   try {
     const text = await req.text();
@@ -261,7 +317,7 @@ async function handleEventPost(req, env) {
   const want = crashToken(env);
   const got = req.headers.get("x-crash-token") || "";
   if (!want) return json({ error: "logging not configured" }, { status: 503 });
-  if (got !== want) return json({ error: "bad token" }, { status: 401 });
+  if (!timingSafeEqual(got, want)) return json({ error: "bad token" }, { status: 401 });
   let body;
   try {
     const text = await req.text();
@@ -418,6 +474,20 @@ ${rows || "<div class='muted'>No crashes recorded.</div>"}
 
 export default {
   async fetch(req, env) {
+    try {
+      return await handle(req, env);
+    } catch (e) {
+      // A missing signing secret (ConfigError) is a deployment misconfig — fail
+      // closed with a 500 rather than signing with a guessable constant.
+      if (e instanceof ConfigError) {
+        return json({ error: "server misconfigured" }, { status: 500 });
+      }
+      throw e;
+    }
+  },
+};
+
+async function handle(req, env) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
@@ -431,7 +501,7 @@ export default {
     if (url.pathname === "/crashes" && req.method === "GET") {
       const want = crashToken(env);
       const got = url.searchParams.get("token") || "";
-      if (!want || got !== want) return new Response("Forbidden", { status: 403 });
+      if (!want || !timingSafeEqual(got, want)) return new Response("Forbidden", { status: 403 });
       const limit = Math.max(10, Math.min(500, parseInt(url.searchParams.get("limit") || "100", 10)));
       const items = await listCrashes(env, limit);
       return html(crashListPage({ items, tokenQs: `token=${encodeURIComponent(want)}` }));
@@ -439,7 +509,7 @@ export default {
     if (url.pathname === "/logs" && req.method === "GET") {
       const want = crashToken(env);
       const got = url.searchParams.get("token") || "";
-      if (!want || got !== want) return new Response("Forbidden", { status: 403 });
+      if (!want || !timingSafeEqual(got, want)) return new Response("Forbidden", { status: 403 });
       const limit = Math.max(10, Math.min(500, parseInt(url.searchParams.get("limit") || "100", 10)));
       const items = await listEvents(env, limit);
       return html(eventListPage({ items, tokenQs: `token=${encodeURIComponent(want)}` }));
@@ -448,13 +518,22 @@ export default {
     // ---- Public: app fetches its own config ----
     // The MAC itself is the bearer: it's hashed from ANDROID_ID so guessing is
     // unfeasible, and each user runs their own worker. The dashboard at /
-    // still requires a per-MAC password for mutations; reads are anonymous so
-    // the app doesn't have to make the user re-enter the password to sync.
+    // still requires a per-MAC password for mutations; reads are anonymous BY
+    // DEFAULT so the app doesn't have to make the user re-enter the password to
+    // sync. Owners who want stronger protection can flip `protectReads` on from
+    // the dashboard — when set, this read requires `?password=` verified
+    // against the stored hash, returning 401 otherwise.
     const macGet = url.pathname.match(/^\/api\/config\/([^/]+)\/?$/);
     if (macGet && req.method === "GET") {
       const mac = normaliseMac(macGet[1]);
       if (!mac) return json({ error: "invalid mac" }, { status: 400 });
       const cfg = await readConfig(env, mac);
+      if (cfg.protectReads) {
+        const supplied = url.searchParams.get("password");
+        if (!(await passwordMatches(cfg, supplied))) {
+          return json({ error: "auth required" }, { status: 401 });
+        }
+      }
       return new Response(
         JSON.stringify({ providers: cfg.providers || [], known: !!cfg.providers?.length }),
         { headers: { "content-type": "application/json; charset=utf-8", ...corsHeaders } },
@@ -471,28 +550,31 @@ export default {
       const password = (f.get("password") || "").toString();
       if (!mac) return redirect("/login?e=mac");
       // Brute-force throttle: 5 failed attempts per MAC in any rolling 15-min
-      // window earn a 60-s lockout. Counter is stored under `lk:<mac>` in
-      // CONFIG KV with the lockout TTL — the same KV the rest of the worker
-      // already uses, no new binding needed.
+      // window start a lockout. The lockout grows exponentially — 60 s after
+      // the 5th fail, doubling per additional fail (120 s, 240 s, …) capped at
+      // 1 h — so sustained guessing gets exponentially more expensive. Counter
+      // is stored under `lk:<mac>` in CONFIG KV with a TTL — the same KV the
+      // rest of the worker already uses, no new binding needed.
       const lockKey = `lk:${mac}`;
       const lockRaw = await env.CONFIG.get(lockKey);
-      if (lockRaw) {
-        const lock = JSON.parse(lockRaw);
-        if (lock.locked && Date.now() < lock.until) {
-          return redirect("/login?e=locked");
-        }
+      const prevLock = parseLock(lockRaw);
+      if (prevLock.locked && Date.now() < prevLock.until) {
+        return redirect("/login?e=locked");
       }
       const cfg = await readConfig(env, mac);
       if (!cfg.passwordHash && !cfg.providers?.length) return redirect(`/signup?mac=${encodeURIComponent(mac)}`);
       if (!cfg.passwordHash) return redirect(`/signup?mac=${encodeURIComponent(mac)}&e=claim`);
       if (!(await passwordMatches(cfg, password))) {
-        const prev = lockRaw ? JSON.parse(lockRaw) : { fails: 0 };
-        const fails = (prev.fails || 0) + 1;
+        const fails = (prevLock.fails || 0) + 1;
         const locked = fails >= 5;
+        const backoffMs = lockoutBackoffMs(fails); // 0 until the 5th fail
+        const until = locked ? Date.now() + backoffMs : 0;
+        // Keep the row alive at least as long as the lockout itself.
+        const ttl = Math.max(15 * 60, Math.ceil(backoffMs / 1000) + 60);
         await env.CONFIG.put(
           lockKey,
-          JSON.stringify({ fails, locked, until: locked ? Date.now() + 60_000 : 0 }),
-          { expirationTtl: 15 * 60 },
+          JSON.stringify({ fails, locked, until }),
+          { expirationTtl: ttl },
         );
         return redirect(locked ? "/login?e=locked" : "/login?e=pw");
       }
@@ -538,7 +620,7 @@ export default {
 
     // Mac-scoped API guard: any /api/(provider|config|password)/:mac path must
     // belong to the cookie-owner. No cross-account peeking.
-    const scoped = url.pathname.match(/^\/api\/(?:provider|config|password)\/([^/]+)/);
+    const scoped = url.pathname.match(/^\/api\/(?:provider|config|password|settings)\/([^/]+)/);
     if (scoped) {
       const target = normaliseMac(scoped[1]);
       if (!target) return badRequest("Invalid MAC");
@@ -553,6 +635,23 @@ export default {
       if (password && password.length < 4) return redirect("/?e=short");
       const cfg = await readConfig(env, me);
       await setPassword(cfg, password);
+      await writeConfig(env, me, cfg);
+      return redirect("/");
+    }
+
+    // Toggle read protection (protectReads). CSRF-protected, session-required,
+    // and scoped to the cookie-owner like the other mutations.
+    if (url.pathname === `/api/settings/${encodeURIComponent(me)}` && req.method === "POST") {
+      const form = await requireCsrf(req, env);
+      if (!form) return json({ error: "csrf" }, { status: 403 });
+      const cfg = await readConfig(env, me);
+      // Checkbox: present (any truthy value) = on, absent = off.
+      const on = ["on", "true", "1"].includes((form.get("protectReads") || "").toString().toLowerCase());
+      if (on && !cfg.passwordHash) {
+        // Protecting reads without a password would lock the app out entirely.
+        return redirect("/?e=nopw");
+      }
+      cfg.protectReads = on;
       await writeConfig(env, me, cfg);
       return redirect("/");
     }
@@ -602,12 +701,19 @@ export default {
       return new Response("", { status: 302, headers: { location: "/login", "set-cookie": clearCookie() } });
     }
 
-    // Raw JSON save (advanced).
+    // Raw JSON save (advanced). This is a cookie-authenticated dashboard
+    // endpoint (see README: "cookie (must own :mac)"), so it gets the same
+    // CSRF protection as the other mutating routes. The token is read from the
+    // `X-CSRF-Token` header (or a `csrf` field in the JSON body) since the
+    // request carries a JSON body rather than form-encoded fields.
     if (url.pathname === `/api/config/${encodeURIComponent(me)}` && req.method === "POST") {
       const body = await req.text();
-      try { JSON.parse(body); } catch { return badRequest("Invalid JSON"); }
+      let incoming;
+      try { incoming = JSON.parse(body); } catch { return badRequest("Invalid JSON"); }
+      const wantCsrf = await csrfFor(req, env);
+      const gotCsrf = (req.headers.get("x-csrf-token") || (incoming && incoming.csrf) || "").toString();
+      if (!wantCsrf || !timingSafeEqual(gotCsrf, wantCsrf)) return json({ error: "csrf" }, { status: 403 });
       // Preserve the password hash + salt; only providers come from the body.
-      const incoming = JSON.parse(body);
       const cfg = await readConfig(env, me);
       cfg.providers = incoming.providers || [];
       await writeConfig(env, me, cfg);
@@ -617,12 +723,11 @@ export default {
     if (url.pathname === "/" || url.pathname === "/dashboard") {
       const cfg = await readConfig(env, me);
       const csrf = await csrfFor(req, env);
-      return html(dashboardPage({ mac: me, cfg, csrf }));
+      return html(dashboardPage({ mac: me, cfg, csrf, err: url.searchParams.get("e") }));
     }
 
     return new Response("Not found", { status: 404 });
-  },
-};
+}
 
 function badRequest(msg) {
   return new Response(msg, { status: 400 });
@@ -662,7 +767,7 @@ button.danger { background:transparent; color:var(--danger); border:1px solid va
 const loginErrors = {
   mac: "Adresse MAC invalide (12 chiffres hex).",
   pw: "Mot de passe incorrect.",
-  locked: "Trop d'essais. Réessaie dans 60 s.",
+  locked: "Trop d'essais. Compte temporairement bloqué — réessaie plus tard (le délai augmente à chaque échec).",
 };
 const signupErrors = {
   mac: "Adresse MAC invalide (12 chiffres hex).",
@@ -716,9 +821,15 @@ function signupPage({ mac, err }) {
 </body></html>`;
 }
 
-function dashboardPage({ mac, cfg, csrf }) {
+const dashboardErrors = {
+  short: "Mot de passe trop court (4 caractères minimum).",
+  nopw: "Définis d'abord un mot de passe de compte avant de protéger les lectures.",
+};
+
+function dashboardPage({ mac, cfg, csrf, err }) {
   const providers = (cfg && cfg.providers) || [];
   const csrfInput = `<input type="hidden" name="csrf" value="${escape(csrf || "")}"/>`;
+  const errMsg = err && dashboardErrors[err];
   const providerRows = providers.map((p, i) => `
     <div class="provider">
       <span class="kind">${escape(p.kind || "?")}</span>
@@ -746,6 +857,8 @@ function dashboardPage({ mac, cfg, csrf }) {
     </div>
     <a href="/logout"><button class="secondary">Se déconnecter</button></a>
   </div>
+
+  ${errMsg ? `<div class="notice err" style="margin-bottom:14px;">${escape(errMsg)}</div>` : ""}
 
   <div class="panel" style="margin-bottom:14px;">
     <h2 style="margin:0 0 8px 0; font-size:16px;">Fournisseurs (${providers.length})</h2>
@@ -805,6 +918,20 @@ function dashboardPage({ mac, cfg, csrf }) {
       <input name="password" type="password" placeholder="Nouveau mot de passe (vide pour effacer)" />
       <button type="submit">Mettre à jour</button>
     </form>
+  </div>
+
+  <div class="panel" style="margin-bottom:14px;">
+    <h2 style="margin:0 0 8px 0; font-size:16px;">🛡️ Protection des lectures</h2>
+    <div class="muted" style="font-size:12px;">Par défaut, <code>GET /api/config/:mac</code> renvoie les fournisseurs sans authentification (l'app n'a pas à redemander le mot de passe à chaque synchro). Active cette option pour exiger <code>?password=</code> sur les lectures aussi. Nécessite un mot de passe de compte défini.</div>
+    <form method="post" action="/api/settings/${encodeURIComponent(mac)}" style="display:flex; gap:10px; align-items:center; margin-top:10px;">
+      ${csrfInput}
+      <label style="display:flex; gap:8px; align-items:center; margin:0; color:var(--fg);">
+        <input type="checkbox" name="protectReads" value="on" style="width:auto;" ${cfg && cfg.protectReads ? "checked" : ""} ${cfg && !cfg.passwordHash ? "disabled" : ""} />
+        Exiger le mot de passe pour lire la config
+      </label>
+      <button type="submit" class="secondary">Enregistrer</button>
+    </form>
+    ${cfg && !cfg.passwordHash ? `<div class="muted" style="font-size:12px; margin-top:6px;">Définis d'abord un mot de passe ci-dessus.</div>` : ""}
   </div>
 
   <div class="panel">

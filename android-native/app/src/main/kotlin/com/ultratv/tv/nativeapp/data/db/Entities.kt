@@ -153,7 +153,7 @@ data class RecordingEntity(
     val title: String,
     val sourceUrl: String,
     val filePath: String,       // absolute path under context.getExternalFilesDir
-    val status: String,         // "queued" | "running" | "done" | "failed" | "cancelled"
+    val status: String,         // "queued" | "running" | "done" | "failed" (retryable) | "error" (terminal) | "cancelled"
     val downloadedBytes: Long = 0,
     val totalBytes: Long = 0,
     val createdAt: Long = System.currentTimeMillis(),

@@ -122,6 +122,12 @@ android {
     }
 }
 
+// Export Room schemas so future version bumps can ship verified Migration
+// objects (and so the schema history is tracked in VCS under app/schemas).
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

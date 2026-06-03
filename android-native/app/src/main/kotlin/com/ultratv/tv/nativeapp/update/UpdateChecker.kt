@@ -42,6 +42,9 @@ object UpdateChecker {
         val versionCode: Int,
         val apkUrl: String,
         val notes: String,
+        /** Download URL of the sibling "<apk>.sha256" asset, if the release
+         *  publishes one. Null → no integrity check available (backward compat). */
+        val sha256Url: String? = null,
     )
 
     private val _state = MutableStateFlow<UpdateInfo?>(null)
@@ -87,12 +90,16 @@ object UpdateChecker {
                 }
                 val assets = json.optJSONArray("assets")
                 var apkUrl: String? = null
+                var sha256Url: String? = null
                 if (assets != null) {
                     for (i in 0 until assets.length()) {
                         val a = assets.getJSONObject(i)
-                        if (a.optString("name").equals(APK_NAME, ignoreCase = true)) {
+                        val name = a.optString("name")
+                        if (name.equals(APK_NAME, ignoreCase = true)) {
                             apkUrl = a.optString("browser_download_url")
-                            break
+                        } else if (name.equals("$APK_NAME.sha256", ignoreCase = true)) {
+                            // Sibling checksum asset (e.g. "UltraTV-debug.apk.sha256").
+                            sha256Url = a.optString("browser_download_url")
                         }
                     }
                 }
@@ -100,7 +107,7 @@ object UpdateChecker {
                     RemoteLog.warn(TAG, "no $APK_NAME asset on $tag")
                     return@use null
                 }
-                val info = UpdateInfo(tag, verName, remoteCode, apkUrl!!, notes)
+                val info = UpdateInfo(tag, verName, remoteCode, apkUrl!!, notes, sha256Url)
                 _state.value = info
                 RemoteLog.info(TAG, "update available: $tag (code $remoteCode)")
                 info
@@ -124,19 +131,60 @@ object UpdateChecker {
         return major * 10_000 + minor * 100 + patch
     }
 
-    /**
-     * Compares against the actual installed VERSION_CODE (build.gradle.kts).
-     * Falls back to the parsed name above when the live versionCode hasn't been
-     * bumped (release script could lag a step).
-     */
-    private val BuildConfig.versionCodeNormalised: Int
-        get() = maxOf(BuildConfig.VERSION_CODE, versionCodeFromName(BuildConfig.VERSION_NAME) ?: 0)
-
     suspend fun downloadAndInstall(ctx: Context, info: UpdateInfo, onProgress: (Float) -> Unit = {}) {
         withContext(Dispatchers.IO) {
             val apk = downloadApk(ctx, info, onProgress)
+            verifyChecksum(apk, info)
             installApk(ctx, apk)
         }
+    }
+
+    /**
+     * If the release published a "<apk>.sha256" sibling asset, fetch the
+     * expected digest and compare it against the SHA-256 of the downloaded
+     * file; abort (delete + throw) on mismatch. When no checksum is published
+     * we proceed but log it — keeps older releases installable (backward
+     * compat). Signing is handled separately by the OS installer; this only
+     * guards against a corrupted / tampered download.
+     */
+    private fun verifyChecksum(apk: File, info: UpdateInfo) {
+        val url = info.sha256Url
+        if (url.isNullOrBlank()) {
+            RemoteLog.warn(TAG, "no sha256 asset for ${info.tag}; installing unverified")
+            return
+        }
+        val expected = runCatching {
+            http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                check(resp.isSuccessful) { "sha256 fetch ${resp.code}" }
+                // Accept "<hex>" or "<hex>  filename" (sha256sum format).
+                resp.body?.string()?.trim()?.substringBefore(' ')?.lowercase().orEmpty()
+            }
+        }.getOrElse {
+            // Couldn't retrieve the published checksum — fail closed: a release
+            // that ships a checksum is asserting integrity matters.
+            apk.delete()
+            error("checksum download failed for ${info.tag}: ${it.message}")
+        }
+        if (expected.isBlank()) {
+            apk.delete()
+            error("empty checksum for ${info.tag}")
+        }
+        val actual = apk.inputStream().use { input ->
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n <= 0) break
+                md.update(buf, 0, n)
+            }
+            md.digest().joinToString("") { "%02x".format(it) }
+        }
+        if (!actual.equals(expected, ignoreCase = true)) {
+            apk.delete()
+            RemoteLog.error(TAG, "checksum mismatch for ${info.tag}: expected=$expected actual=$actual")
+            error("APK checksum mismatch — install aborted")
+        }
+        RemoteLog.info(TAG, "checksum verified for ${info.tag}")
     }
 
     private fun downloadApk(ctx: Context, info: UpdateInfo, onProgress: (Float) -> Unit): File {

@@ -75,7 +75,7 @@ fun RecordingsScreen(
                         val sub = when (r.status) {
                             "running" -> "${S.recordingStatusRunning} $pct% (${formatBytes(r.downloadedBytes)} / ${formatBytes(r.totalBytes)})"
                             "done" -> "${S.recordingStatusDone} · ${formatBytes(r.totalBytes)}"
-                            "failed" -> "${S.recordingStatusFailed} — ${r.errorMessage ?: "unknown error"}"
+                            "failed", "error" -> "${S.recordingStatusFailed} — ${r.errorMessage ?: "unknown error"}"
                             "cancelled" -> S.recordingStatusCancelled
                             else -> S.recordingStatusQueued
                         }

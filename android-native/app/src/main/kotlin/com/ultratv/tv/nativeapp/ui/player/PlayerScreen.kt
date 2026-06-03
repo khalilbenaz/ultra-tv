@@ -68,9 +68,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import androidx.tv.material3.Button
 import androidx.tv.material3.Text
@@ -179,22 +177,18 @@ class PlayerViewModel @Inject constructor(
         return resolved
     }
 
-    // Resume position to seek to when the player opens. Loaded once via [prepareResume].
-    private val _resumeMs = MutableStateFlow(0L)
-    val resumeMs: StateFlow<Long> = _resumeMs.asStateFlow()
-
     /**
-     * Reads the last persisted position for the current item and exposes it
-     * via [resumeMs]. The player composable seeks to that offset once the
-     * source is ready. Live channels never resume — they snap to the live
-     * edge instead.
+     * Reads the last persisted position for the current item and returns the
+     * offset (ms) the player should seek to once the source is ready. Live
+     * channels never resume — they snap to the live edge instead, so this
+     * returns 0 for them. Suspends so the caller can await the DB read and
+     * seek with the actual value (the old fire-and-forget version raced the
+     * seekTo() and never moved the playhead).
      */
-    fun prepareResume() {
-        val c = playback.current.value ?: run { _resumeMs.value = 0; return }
-        if (c.kind == "LIVE") { _resumeMs.value = 0; return }
-        viewModelScope.launch {
-            _resumeMs.value = history.resumePositionMs(c.providerId, c.kind, c.remoteId)
-        }
+    suspend fun prepareResume(): Long {
+        val c = playback.current.value ?: return 0L
+        if (c.kind == "LIVE") return 0L
+        return history.resumePositionMs(c.providerId, c.kind, c.remoteId)
     }
 
     /** Persists the current playback position. Called periodically + on dispose. */
@@ -234,11 +228,20 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
     var playbackSpeed by remember { mutableStateOf(1.0f) }
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
 
-    // Snapshot prefs at composition. Stable for the lifetime of the screen —
-    // changing buffer / frame-rate / decoder takes effect on next launch
-    // (rebuilding the player on every recomposition would tear the stream).
-    val playbackPrefs = remember {
-        kotlinx.coroutines.runBlocking { vm.playbackPrefs() }
+    // Load prefs off the main thread. runBlocking here blocked the main thread
+    // on a DataStore read during composition (ANR risk). produceState starts
+    // null and emits the real values once the first read completes; we show a
+    // black placeholder until then so the player is built exactly once with the
+    // resolved prefs (keeping it stable for the screen's lifetime — changing
+    // buffer / frame-rate / decoder still only takes effect on next launch).
+    val loadedPrefs by androidx.compose.runtime.produceState<com.ultratv.tv.nativeapp.data.prefs.UserPrefs?>(
+        initialValue = null,
+    ) {
+        value = vm.playbackPrefs()
+    }
+    val playbackPrefs = loadedPrefs ?: run {
+        Box(Modifier.fillMaxSize().background(Color.Black))
+        return
     }
 
     val player = remember {
@@ -382,9 +385,9 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
         if (currentUrl.isNotBlank()) {
             player.setMediaItem(MediaItem.fromUri(currentUrl))
             player.prepare()
-            // Seek to last persisted position if VOD/episode has one.
-            vm.prepareResume()
-            val resume = vm.resumeMs.value
+            // Seek to last persisted position if VOD/episode has one. Awaits the
+            // DB read so the seek uses the real value (was racing before).
+            val resume = vm.prepareResume()
             // Skip stale "near-end" positions so credits don't auto-replay.
             if (resume > 5_000) {
                 player.seekTo(resume)

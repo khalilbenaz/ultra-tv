@@ -5,12 +5,13 @@
   "main": "main.cjs",
   "scripts": {
     "build:web": "cd ../web && npm run build",
-    "dev": "electron .",
+    "dev": "cross-env SV_DEV=1 electron .",
     "package:mac": "npm run build:web && electron-builder --mac",
     "package:win": "npm run build:web && electron-builder --win",
     "package:linux": "npm run build:web && electron-builder --linux"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8"
   },

@@ -2,7 +2,10 @@ name = "ultratv-proxy"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# Optional: restrict upstream hosts. Comma-separated, no spaces around commas.
-# Set via dashboard or:  wrangler secret put ALLOWED_HOSTS
+# REQUIRED: allow-list of upstream hosts. Comma-separated, no spaces around commas.
+# The Worker is default-deny: if ALLOWED_HOSTS is unset or empty it returns 403
+# for every request (so it can't be abused as an open proxy). You MUST configure
+# it before the proxy will forward anything.
+# Set via dashboard, the [vars] block below, or:  wrangler secret put ALLOWED_HOSTS
 # [vars]
 # ALLOWED_HOSTS = "example.com,iptv.foo.tv"

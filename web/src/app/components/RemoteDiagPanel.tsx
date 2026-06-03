@@ -14,6 +14,7 @@
 // first remote action is received (then it minimises automatically).
 
 import { useEffect, useRef, useState } from "react";
+import { getDiagErrors, type DiagError } from "@app/diag/errorSink";
 
 declare global {
   interface Window {
@@ -50,6 +51,7 @@ export function RemoteDiagPanel() {
   const [log, setLog] = useState<LogLine[]>([]);
   const [focusables, setFocusables] = useState(0);
   const [activeLabel, setActiveLabel] = useState("(none)");
+  const [errors, setErrors] = useState<DiagError[]>([]);
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -95,6 +97,7 @@ export function RemoteDiagPanel() {
     const tick = window.setInterval(() => {
       setFocusables(countFocusables());
       setActiveLabel(shortLabel(document.activeElement));
+      setErrors(getDiagErrors().slice(0, 3));
     }, 500);
 
     return () => {
@@ -155,6 +158,12 @@ export function RemoteDiagPanel() {
         {log.length === 0 && <div>—</div>}
         {log.map((l, i) => (<div key={i}>· {l.text}</div>))}
       </div>
+      {errors.length > 0 && (
+        <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid #5a2030", fontSize: 11, color: "#ff9a9a" }}>
+          Caught errors (newest first):
+          {errors.map((e, i) => (<div key={i}>· {fmt(e.t)}: {e.message}</div>))}
+        </div>
+      )}
     </div>
   );
 }

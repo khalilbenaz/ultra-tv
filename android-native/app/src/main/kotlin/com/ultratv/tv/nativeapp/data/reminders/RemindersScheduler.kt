@@ -13,6 +13,7 @@ import androidx.core.content.getSystemService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
@@ -125,12 +126,22 @@ class ReminderReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra(RemindersScheduler.EXTRA_TITLE).orEmpty()
         val channel = intent.getStringExtra(RemindersScheduler.EXTRA_CHANNEL).orEmpty()
         scheduler.postFireNotification(id, channel, title)
-        // Async cleanup — broadcast receivers can use goAsync() to keep the
-        // process alive for a few seconds while we delete the row.
+        // Async cleanup — goAsync() keeps the process alive while we delete the
+        // row. Use a job scoped to this receiver (SupervisorJob + IO) instead of
+        // GlobalScope so the work is structured and always finishes the pending
+        // result (even on failure), rather than leaking an unsupervised
+        // coroutine onto the global scope.
         val pending = goAsync()
-        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try { dao.deleteById(id) } finally { pending.finish() }
+        val scope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+        )
+        scope.launch {
+            try {
+                dao.deleteById(id)
+            } finally {
+                pending.finish()
+                scope.cancel()
+            }
         }
     }
 }

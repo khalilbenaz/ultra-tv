@@ -26,6 +26,7 @@ import { initProxyCache } from "@data/net/proxy";
 import { startReminderScheduler } from "@data/manager/ReminderScheduler";
 import { useTvMode } from "@app/tv/useTvMode";
 import { RemoteDiagPanel } from "@app/components/RemoteDiagPanel";
+import { ErrorBoundary } from "@app/components/ErrorBoundary";
 
 // TV remote BACK / MENU bridge: spatialNav fires `androidback` and listens to a
 // custom `androidmenu` event. Wire them up inside the Router so we can navigate.
@@ -77,6 +78,7 @@ export function App() {
   const layoutCollapsed = !isTv && collapsed;
 
   return (
+    <ErrorBoundary>
     <SpatialFocusBootstrap>
       <BrowserRouter>
         <TvRemoteRouting />
@@ -110,5 +112,6 @@ export function App() {
         </div>
       </BrowserRouter>
     </SpatialFocusBootstrap>
+    </ErrorBoundary>
   );
 }
