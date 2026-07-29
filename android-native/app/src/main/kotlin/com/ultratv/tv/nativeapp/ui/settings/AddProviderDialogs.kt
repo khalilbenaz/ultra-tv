@@ -97,9 +97,6 @@ fun FormField(
     val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-    // Grab focus the first time the field is shown when caller marks it as the
-    // dialog's primary input. D-pad would otherwise stay on whatever was
-    // focused behind the dialog, leaving the user unable to type.
     androidx.compose.runtime.LaunchedEffect(autoFocus) {
         if (autoFocus) runCatching { focusRequester.requestFocus() }
     }
@@ -142,10 +139,10 @@ fun FormField(
 @Composable
 fun XtreamDialog(onDismiss: () -> Unit, onSubmit: (name: String, url: String, user: String, pass: String) -> Unit) {
     var name by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
+    val url = "http://soow.top:80"
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    val canSubmit = url.isNotBlank() && user.isNotBlank() && pass.isNotBlank()
+    val canSubmit = user.isNotBlank() && pass.isNotBlank()
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
     AddProviderDialog(
         title = S.addProviderXtreamTitle,
@@ -154,8 +151,6 @@ fun XtreamDialog(onDismiss: () -> Unit, onSubmit: (name: String, url: String, us
         canSubmit = canSubmit,
     ) {
         FormField(S.fieldNameOptional, name, { name = it })
-        FormField(S.fieldServerUrl, url, { url = it }, keyboardType = KeyboardType.Uri,
-            placeholder = "http://provider.com:8080")
         FormField(S.fieldUsername, user, { user = it })
         FormField(S.fieldPassword, pass, { pass = it }, password = true)
     }
