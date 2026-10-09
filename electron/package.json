@@ -1,6 +1,6 @@
 {
   "name": "ultratv-desktop",
-  "version": "1.2.33",
+  "version": "1.2.34",
   "description": "Ultra TV desktop - Electron shell around the web app.",
   "author": "Ultra TV",
   "license": "MIT",

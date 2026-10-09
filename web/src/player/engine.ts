@@ -5,6 +5,7 @@
 import type Hls from "hls.js";
 import type { Level } from "hls.js";
 import type MpegtsNs from "mpegts.js";
+import { bestTrackIndex, trackLabel } from "./trackChoice";
 import { requestHeaders, wrapUrl, type Transport } from "@/net/transport";
 
 export type PlayState = "idle" | "loading" | "playing" | "paused" | "buffering" | "ended" | "error";
@@ -52,6 +53,10 @@ export class PlayerEngine {
   private mediaRecoveries: number[] = [];
   /** Écouteur de reprise (startAt) du lecteur natif : retiré au changement de média. */
   private pendingSeek: (() => void) | null = null;
+  /** Langues préférées (ISO 639-1, ordonnées) et langue de l'interface ; choix manuel = plus d'automatisme sur ce média. */
+  preferredAudio: string[] = [];
+  uiLang = "en";
+  private audioManual = false;
 
   constructor(private video: HTMLVideoElement, private getTransport: () => Transport, private ev: EngineEvents) {
     const v = video;
@@ -61,10 +66,14 @@ export class PlayerEngine {
     v.addEventListener("ended", () => this.ev.onState("ended"));
     v.addEventListener("error", () => this.ev.onError(`media:${v.error?.code ?? 0}`));
     v.addEventListener("loadedmetadata", () => this.emitTracks());
+    // Lecteur natif (MKV/MP4) : pistes audio exposées par le navigateur quand il les prend en charge (Safari, Chromium à drapeau).
+    const nat = (v as unknown as { audioTracks?: EventTarget & ArrayLike<{ language: string; label: string; enabled: boolean }> }).audioTracks;
+    for (const k of ["addtrack", "removetrack", "change"]) nat?.addEventListener?.(k, () => this.emitTracks());
   }
 
   async load(a: LoadArgs): Promise<void> {
     const my = ++this.token;
+    this.audioManual = false;
     this.teardown();
     this.ev.onState("loading");
     const t = this.getTransport();
@@ -161,19 +170,52 @@ export class PlayerEngine {
     this.mpegts = player;
   }
 
+  /** Applique la langue audio préférée tant que l'utilisateur n'a pas choisi à la main. */
+  private autoSelectAudio() {
+    if (this.audioManual || this.preferredAudio.length === 0) return;
+    const h = this.hls;
+    if (h && h.audioTracks.length > 1) {
+      const i = bestTrackIndex(h.audioTracks.map((x) => ({ lang: x.lang, label: x.name })), this.preferredAudio);
+      if (i !== null && h.audioTrack !== i) h.audioTrack = i;
+      return;
+    }
+    const nat = this.nativeAudio();
+    if (nat.length > 1) {
+      const i = bestTrackIndex(nat.map((x) => ({ lang: x.language, label: x.label })), this.preferredAudio);
+      if (i !== null && !nat[i]!.enabled) nat.forEach((x, j) => { x.enabled = j === i; });
+    }
+  }
+
+  private nativeAudio(): { language: string; label: string; enabled: boolean }[] {
+    const a = (this.video as unknown as { audioTracks?: ArrayLike<{ language: string; label: string; enabled: boolean }> }).audioTracks;
+    return a ? Array.from(a) : [];
+  }
+
   private emitTracks() {
+    this.autoSelectAudio();
     const h = this.hls;
     const levels = h ? h.levels.map((l: Level, i: number) => ({ id: i, label: l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)} kb/s` })) : [];
-    const audio = h ? h.audioTracks.map((x, i) => ({ id: i, label: x.name || x.lang || `#${i + 1}`, lang: x.lang })) : [];
-    const text = h ? h.subtitleTracks.map((x, i) => ({ id: i, label: x.name || x.lang || `#${i + 1}`, lang: x.lang })) : [];
+    let audio = h ? h.audioTracks.map((x, i) => ({ id: i, label: trackLabel({ lang: x.lang, label: x.name }, i, this.uiLang), lang: x.lang })) : [];
+    let activeAudio = h?.audioTrack ?? -1;
+    if (!h) {
+      const nat = this.nativeAudio();
+      audio = nat.map((x, i) => ({ id: i, label: trackLabel({ lang: x.language, label: x.label }, i, this.uiLang), lang: x.language }));
+      activeAudio = nat.findIndex((x) => x.enabled);
+    }
+    const text = h ? h.subtitleTracks.map((x, i) => ({ id: i, label: trackLabel({ lang: x.lang, label: x.name }, i, this.uiLang), lang: x.lang })) : [];
     this.ev.onTracks({
-      audio, activeAudio: h?.audioTrack ?? -1, text, activeText: h?.subtitleTrack ?? -1,
+      audio, activeAudio, text, activeText: h?.subtitleTrack ?? -1,
       levels, activeLevel: h ? (h.autoLevelEnabled ? -1 : h.currentLevel) : -1,
     });
   }
 
   setLevel(id: number) { if (this.hls) { this.hls.currentLevel = id; this.emitTracks(); } }
-  setAudio(id: number) { if (this.hls) { this.hls.audioTrack = id; this.emitTracks(); } }
+  setAudio(id: number) {
+    this.audioManual = true;
+    if (this.hls) this.hls.audioTrack = id;
+    else this.nativeAudio().forEach((x, j) => { x.enabled = j === id; });
+    this.emitTracks();
+  }
   setText(id: number) { if (this.hls) { this.hls.subtitleTrack = id; this.emitTracks(); } }
 
   stats(): Stats {

@@ -83,6 +83,9 @@ class ExoEngine(private val ctx: Context, override val config: EngineConfig) : P
                     _events.tryEmit(EngineEvent.Error(PlaybackPlanner.classifyExo(error.errorCode, status)))
                 }
                 override fun onVideoSizeChanged(videoSize: VideoSize) { applyFrameRate() }
+                // Les pistes ne sont connues qu'une fois le conteneur analysé (et peuvent arriver plus tard) : le choix
+                // automatique se refait à chaque changement, tant que l'utilisateur n'a rien choisi à la main.
+                override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { autoSelectTracks() }
             })
         }
         playerView.player = player
@@ -90,10 +93,51 @@ class ExoEngine(private val ctx: Context, override val config: EngineConfig) : P
         applySubtitleStyle(config.subtitleStyle)
         // Choix automatique des pistes : listes ordonnées de langues préférées (la première disponible l'emporte).
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setPreferredAudioLanguages(*config.preferredAudio.toTypedArray())
-            .setPreferredTextLanguages(*config.preferredText.toTypedArray())
+            .setPreferredAudioLanguages(*config.preferredAudio.flatMap { languageVariants(it) }.distinct().toTypedArray())
+            .setPreferredTextLanguages(*config.preferredText.flatMap { languageVariants(it) }.distinct().toTypedArray())
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, config.textOff)
             .build()
+    }
+
+    /** « fr » → fr, fra, fre : les flux étiquettent en 639-1, 639-2/T ou 639-2/B. */
+    private fun languageVariants(code: String): List<String> {
+        val c = com.ultratv.tv.nativeapp.data.subtitles.TrackChoice.normalizeLanguage(code) ?: return emptyList()
+        val t = runCatching { java.util.Locale(c).isO3Language }.getOrNull()
+        val b = when (c) { "fr" -> "fre"; "de" -> "ger"; "nl" -> "dut"; "zh" -> "chi"; "cs" -> "cze"; "el" -> "gre"; "ro" -> "rum"; "sk" -> "slo"; "fa" -> "per"; else -> null }
+        return listOfNotNull(c, t, b)
+    }
+
+    private var audioManual = false
+    private var textManual = false
+    private var lastAutoAudio: String? = null
+    private var lastAutoText: String? = null
+
+    private data class Flat(val gi: Int, val ti: Int, val group: androidx.media3.common.Tracks.Group, val cand: com.ultratv.tv.nativeapp.data.subtitles.TrackChoice.Candidate)
+
+    private fun flat(type: Int): List<Flat> = player.currentTracks.groups.withIndex().filter { it.value.type == type }.flatMap { (gi, g) ->
+        (0 until g.length).filter { g.isTrackSupported(it) }.map { ti -> val f = g.getTrackFormat(ti); Flat(gi, ti, g, com.ultratv.tv.nativeapp.data.subtitles.TrackChoice.Candidate(f.language, f.label)) }
+    }
+
+    /**
+     * Media3 ne compare que la balise de langue : une piste sans balise (« und ») mais nommée « French » / « VFF »
+     * lui échappe. On complète donc par le nom, sans jamais écraser un choix manuel.
+     */
+    private fun autoSelectTracks() {
+        val tc = com.ultratv.tv.nativeapp.data.subtitles.TrackChoice
+        if (!audioManual && config.preferredAudio.isNotEmpty()) {
+            val a = flat(C.TRACK_TYPE_AUDIO)
+            if (a.size > 1) tc.bestIndex(a.map { it.cand }, config.preferredAudio)?.let { a[it] }?.takeIf { !it.group.isTrackSelected(it.ti) && lastAutoAudio != "${it.gi}:${it.ti}" }?.let {
+                lastAutoAudio = "${it.gi}:${it.ti}"
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setOverrideForType(TrackSelectionOverride(it.group.mediaTrackGroup, it.ti)).build()
+            }
+        }
+        if (!textManual && !config.textOff && config.preferredText.isNotEmpty()) {
+            val t = flat(C.TRACK_TYPE_TEXT)
+            if (t.isNotEmpty()) tc.bestIndex(t.map { it.cand }, config.preferredText)?.let { t[it] }?.takeIf { !it.group.isTrackSelected(it.ti) && lastAutoText != "${it.gi}:${it.ti}" }?.let {
+                lastAutoText = "${it.gi}:${it.ti}"
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setOverrideForType(TrackSelectionOverride(it.group.mediaTrackGroup, it.ti)).build()
+            }
+        }
     }
 
     override fun applySubtitleStyle(style: com.ultratv.tv.nativeapp.data.subtitles.SubtitleStyle): Boolean {
@@ -111,6 +155,7 @@ class ExoEngine(private val ctx: Context, override val config: EngineConfig) : P
         val sub = MediaItem.SubtitleConfiguration.Builder(android.net.Uri.fromFile(java.io.File(path)))
             .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP).setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build()
         val pos = player.currentPosition
+        textManual = true
         player.setMediaItem(cur.buildUpon().setSubtitleConfigurations(listOf(sub)).build(), pos)
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
         player.prepare()
@@ -121,6 +166,7 @@ class ExoEngine(private val ctx: Context, override val config: EngineConfig) : P
 
     override fun load(url: String, startPositionMs: Long) {
         // Flux précédent arrêté et libéré AVANT d'ouvrir le suivant (connexion unique du fournisseur).
+        audioManual = false; textManual = false; lastAutoAudio = null; lastAutoText = null
         if (player.mediaItemCount > 0) {
             player.stop()
             // Moteur réutilisé (zap) : les choix de pistes faits à la main sur la chaîne précédente ne la suivent pas.
@@ -148,9 +194,12 @@ class ExoEngine(private val ctx: Context, override val config: EngineConfig) : P
     private fun tracks(type: Int): List<TrackInfo> = player.currentTracks.groups.withIndex().filter { it.value.type == type }.flatMap { (gi, g) ->
         (0 until g.length).map { ti ->
             val f = g.getTrackFormat(ti)
-            val label = listOfNotNull(f.label, f.language?.takeIf { it != "und" }, f.sampleMimeType?.substringAfter('/')?.uppercase(), f.channelCount.takeIf { it > 0 && type == C.TRACK_TYPE_AUDIO }?.let { "${it}ch" })
-                .joinToString(" · ").ifBlank { "#${ti + 1}" }
-            TrackInfo("$gi:$ti", label, g.isTrackSelected(ti))
+            val tc = com.ultratv.tv.nativeapp.data.subtitles.TrackChoice
+            val label = tc.humanLabel(
+                f.language, f.label, if (type == C.TRACK_TYPE_AUDIO) tc.codecLabel(f.sampleMimeType) else null, if (type == C.TRACK_TYPE_AUDIO) f.channelCount else 0,
+                forced = f.selectionFlags and C.SELECTION_FLAG_FORCED != 0, index = ti + 1, ui = java.util.Locale(config.uiLanguage),
+            )
+            TrackInfo("$gi:$ti", label, g.isTrackSelected(ti), tc.normalizeLanguage(f.language) ?: tc.languageFromLabel(f.label))
         }
     }
     override fun audioTracks() = tracks(C.TRACK_TYPE_AUDIO)
@@ -159,12 +208,15 @@ class ExoEngine(private val ctx: Context, override val config: EngineConfig) : P
     private fun select(id: String, type: Int, enableText: Boolean = false) {
         val (gi, ti) = id.split(':').map { it.toInt() }
         val group = player.currentTracks.groups.getOrNull(gi) ?: return
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enableText && type == C.TRACK_TYPE_TEXT)
+        // Ne toucher à l'état des sous-titres que pour une piste de sous-titres (choisir un audio ne doit pas les réactiver).
+        val b = player.trackSelectionParameters.buildUpon()
+        if (type == C.TRACK_TYPE_TEXT) b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enableText)
+        player.trackSelectionParameters = b
             .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, ti)).build()
     }
-    override fun selectAudio(id: String) = select(id, C.TRACK_TYPE_AUDIO)
+    override fun selectAudio(id: String) { audioManual = true; select(id, C.TRACK_TYPE_AUDIO) }
     override fun selectSubtitle(id: String?) {
+        textManual = true
         if (id == null) player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
         else select(id, C.TRACK_TYPE_TEXT, enableText = true)
     }

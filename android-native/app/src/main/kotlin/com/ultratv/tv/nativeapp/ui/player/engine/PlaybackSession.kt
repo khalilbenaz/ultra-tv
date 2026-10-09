@@ -51,6 +51,8 @@ class PlaybackSession(
     private val userAgent: String,
     /** Style des sous-titres et langues préférées au moment du lancement du moteur. */
     private val subtitles: () -> com.ultratv.tv.nativeapp.data.prefs.SubtitleSettings = { com.ultratv.tv.nativeapp.data.prefs.SubtitleSettings() },
+    /** Langue de l'interface (ISO 639-1) : langue audio par défaut quand aucune préférence n'est réglée. */
+    private val uiLanguage: () -> String = { java.util.Locale.getDefault().language },
     private val engineFactory: (EngineKind, EngineConfig) -> PlayerEngine = { k, c -> if (k == EngineKind.EXO) ExoEngine(ctx, c) else VlcEngine(ctx, c) },
 ) {
     private val _state = MutableStateFlow(SessionState())
@@ -124,6 +126,14 @@ class PlaybackSession(
     /** Changement manuel (pilule « Lecteur ») : on le mémorise tout de suite pour cette chaîne. */
     fun switchTo(c: Combo) { manualSwitch = true; tried = mutableSetOf(); combo = c; key?.let { memory.remember(it, c, null) }; launch(c) }
 
+    /** Choix manuel de la piste audio : appliqué, puis sa langue est retenue pour ce titre (jamais l'identifiant de piste). */
+    fun selectAudio(id: String) {
+        val e = engine ?: return
+        val lang = e.audioTracks().firstOrNull { it.id == id }?.language
+        e.selectAudio(id)
+        if (lang != null) key?.let { memory.rememberAudioLang(it, lang) }
+    }
+
     fun setBufferPreset(p: BufferPreset) { presetOverride = p; key?.let { memory.remember(it, null, p) }; launch(combo) }
 
     private fun launch(c: Combo) {
@@ -141,7 +151,12 @@ class PlaybackSession(
         val sub = subtitles()
         launchedSubs = sub
         // Sous-titres : jamais activés d'office ; seulement si l'utilisateur les avait activés la dernière fois.
-        val cfg = EngineConfig(c.decoder, buffer, isLive, autoFrameRate, userAgent, sub.style, sub.languages.audio, if (sub.autoOn) sub.languages.text else emptyList(), textOff = !sub.autoOn)
+        // Langue audio : choix manuel mémorisé pour ce titre > réglage Langues > langue de l'interface (jamais « la première piste »).
+        val ui = uiLanguage()
+        val tc = com.ultratv.tv.nativeapp.data.subtitles.TrackChoice
+        val audioPref = tc.effectivePreferred(sub.languages.audio, key?.let { memory.audioLang(it) }, ui)
+        val textPref = if (sub.autoOn) tc.effectivePreferred(sub.languages.text, null, ui) else emptyList()
+        val cfg = EngineConfig(c.decoder, buffer, isLive, autoFrameRate, userAgent, sub.style, audioPref, textPref, textOff = !sub.autoOn, uiLanguage = ui)
         val e = runCatching { engineFactory(c.engine, cfg) }.getOrElse { onError(PlayErrorKind.UNKNOWN); return }
         engine = e
         container.removeAllViews(); container.addView(e.view, FrameLayout.LayoutParams(-1, -1))

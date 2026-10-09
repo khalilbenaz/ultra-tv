@@ -31,7 +31,8 @@ sealed interface EngineEvent {
     data class Error(val kind: PlayErrorKind) : EngineEvent
 }
 
-data class TrackInfo(val id: String, val label: String, val selected: Boolean)
+/** [language] : code ISO 639-1 normalisé si connu (sert à mémoriser le choix manuel par titre). */
+data class TrackInfo(val id: String, val label: String, val selected: Boolean, val language: String? = null)
 
 data class EngineStats(
     val resolution: String? = null,
@@ -59,6 +60,8 @@ data class EngineConfig(
     val preferredText: List<String> = emptyList(),
     /** Aucune piste de sous-titres choisie automatiquement (même marquée « par défaut » dans le flux). */
     val textOff: Boolean = false,
+    /** Langue de l'interface (ISO 639-1) : noms de langues des pistes affichés dans cette langue. */
+    val uiLanguage: String = java.util.Locale.getDefault().language,
 )
 
 /**

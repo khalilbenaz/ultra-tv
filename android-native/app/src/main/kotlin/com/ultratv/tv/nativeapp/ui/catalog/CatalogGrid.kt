@@ -2,6 +2,7 @@ package com.ultratv.tv.nativeapp.ui.catalog
 
 import com.ultratv.tv.nativeapp.i18n.traktWatched
 import com.ultratv.tv.nativeapp.data.repo.atMostEvery
+import com.ultratv.tv.nativeapp.data.repo.snapshotWhile
 import com.ultratv.tv.nativeapp.ui.common.RowBleed
 import com.ultratv.tv.nativeapp.ui.common.rowBleedStart
 import androidx.compose.foundation.layout.Arrangement
@@ -99,6 +100,7 @@ class CatalogGridViewModel @Inject constructor(
     private val movieDao: MovieDao,
     private val seriesDao: SeriesDao,
     private val trakt: com.ultratv.tv.nativeapp.data.trakt.TraktLibraryRepository,
+    syncBus: com.ultratv.tv.nativeapp.data.repo.SyncStatusBus,
 ) : ViewModel() {
     private val kind = MutableStateFlow(CatalogKind.MOVIES)
     fun bind(k: CatalogKind) { kind.value = k }
@@ -106,6 +108,9 @@ class CatalogGridViewModel @Inject constructor(
     private val _selected = MutableStateFlow<String?>(null)
     val selected: StateFlow<String?> = _selected
     fun select(remoteId: String?) { _selected.value = remoteId }
+
+    /** Synchro en cours : compteurs et rangées lus une seule fois au lieu d'être relancés à chaque lot inséré. */
+    private val syncing = syncBus.status.map { it != null }.distinctUntilChanged()
 
     private val pid = providerRepo.observeProviders().map { ps -> (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id }.distinctUntilChanged()
 
@@ -116,7 +121,7 @@ class CatalogGridViewModel @Inject constructor(
             if (p == null) flowOf(emptyList())
             else {
                 val kindName = if (k == CatalogKind.MOVIES) "MOVIE" else "SERIES"
-                val counts: Flow<List<CategoryCount>> = if (k == CatalogKind.MOVIES) movieDao.observeCategoryCounts(p).atMostEvery(1_000) else seriesDao.observeCategoryCounts(p).atMostEvery(1_000)
+                val counts: Flow<List<CategoryCount>> = if (k == CatalogKind.MOVIES) movieDao.observeCategoryCounts(p).atMostEvery(1_000).snapshotWhile(syncing) else seriesDao.observeCategoryCounts(p).atMostEvery(1_000).snapshotWhile(syncing)
                 combine(catalog.categories(p, kindName), counts) { cats: List<CategoryEntity>, cnt ->
                     val nonEmpty = cnt.filter { it.n > 0 }.mapNotNull { it.categoryId }.toSet()
                     cats.filter { it.remoteId in nonEmpty && hiddenStore.keyFor(kindName, p, it.remoteId) !in hidden }
@@ -130,7 +135,7 @@ class CatalogGridViewModel @Inject constructor(
     fun toggleLang(code: String) { _langView.value = _langView.value.toggle(code) }
     fun clearLangView() { _langView.value = com.ultratv.tv.nativeapp.data.repo.LangView.ALL }
     val langCounts: StateFlow<List<com.ultratv.tv.nativeapp.data.db.LangCount>> = combine(pid, kind) { p, k -> p to k }
-        .flatMapLatest { (p, k) -> if (p == null) flowOf(emptyList()) else if (k == CatalogKind.MOVIES) movieDao.observeLangCounts(p).atMostEvery(1_000) else seriesDao.observeLangCounts(p).atMostEvery(1_000) }
+        .flatMapLatest { (p, k) -> if (p == null) flowOf(emptyList()) else if (k == CatalogKind.MOVIES) movieDao.observeLangCounts(p).atMostEvery(1_000).snapshotWhile(syncing) else seriesDao.observeLangCounts(p).atMostEvery(1_000).snapshotWhile(syncing) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
@@ -142,8 +147,8 @@ class CatalogGridViewModel @Inject constructor(
     fun rowItems(cat: String): StateFlow<List<PosterItem>?> = rowCache.getOrPut(cat) {
         combine(pid, kind) { p, k -> p to k }.flatMapLatest { (p, k) ->
             if (p == null) flowOf(emptyList())
-            else if (k == CatalogKind.MOVIES) movieDao.observeRow(p, cat, ROW_SIZE).atMostEvery(1_000).map { l -> val lib = trakt.library.value; l.map { PosterItem(it.id, it.title, it.poster, it.year, it.rating, watched = lib.isMovieWatched(it.title, it.year)) } }
-            else seriesDao.observeRow(p, cat, ROW_SIZE).atMostEvery(1_000).map { l -> l.map { PosterItem(it.id, it.title, it.poster, it.year, it.rating) } }
+            else if (k == CatalogKind.MOVIES) movieDao.observeRow(p, cat, ROW_SIZE).atMostEvery(1_000).snapshotWhile(syncing).map { l -> val lib = trakt.library.value; l.map { PosterItem(it.id, it.title, it.poster, it.year, it.rating, watched = lib.isMovieWatched(it.title, it.year)) } }
+            else seriesDao.observeRow(p, cat, ROW_SIZE).atMostEvery(1_000).snapshotWhile(syncing).map { l -> l.map { PosterItem(it.id, it.title, it.poster, it.year, it.rating) } }
         }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), null)
     }
 
@@ -321,7 +326,8 @@ internal fun PosterCell(item: PosterItem, modifier: Modifier, onClick: () -> Uni
         // Deux lignes réservées (cellules alignées dans la rangée / la grille) : un titre long n'est plus coupé à 15 caractères.
         Text(item.title, color = Ux.Text, fontFamily = Manrope, fontWeight = FontWeight.Bold, fontSize = if (touch) 13.sp else 22.spx,
             lineHeight = if (touch) 16.sp else 27.spx, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        val meta = listOfNotNull(item.year?.toString(), item.rating?.let { "★ %.1f".format(java.util.Locale.ROOT, it) }).joinToString(" · ")
+        // Formatage (String.format) une fois par affiche, pas à chaque recomposition de la cellule.
+        val meta = androidx.compose.runtime.remember(item.year, item.rating) { listOfNotNull(item.year?.toString(), item.rating?.let { "★ %.1f".format(java.util.Locale.ROOT, it) }).joinToString(" · ") }
         Text(meta, color = Ux.Text3, fontFamily = Manrope, fontSize = if (touch) 12.sp else 22.spx, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(if (touch) 16.dp else 30.design))
     }
 }

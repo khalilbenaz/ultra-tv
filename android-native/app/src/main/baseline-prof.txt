@@ -30,6 +30,13 @@ HSPLcom/ultratv/tv/nativeapp/data/repo/**;->**(**)**
 HSPLcom/ultratv/tv/nativeapp/data/prefs/**;->**(**)**
 HSPLcom/ultratv/tv/nativeapp/data/security/**;->**(**)**
 HSPLcom/ultratv/tv/nativeapp/di/**;->**(**)**
+HSPLcom/ultratv/tv/nativeapp/perf/**;->**(**)**
+HSPLcom/ultratv/tv/nativeapp/adaptive/**;->**(**)**
+# Rangées Trakt de l'accueil (rapprochement catalogue) : chemin chaud dès le lancement.
+HSPLcom/ultratv/tv/nativeapp/data/trakt/**;->**(**)**
+HSPLandroidx/paging/**;->**(**)**
+HSPLandroidx/navigation/**;->**(**)**
+HSPLcoil/**;->**(**)**
 Lcom/ultratv/tv/nativeapp/**;
 HSPLandroidx/compose/ui/focus/**;->**(**)**
 HSPLandroidx/compose/foundation/lazy/**;->**(**)**

@@ -78,7 +78,9 @@ class UltraTvApp : Application(), ImageLoaderFactory, Configuration.Provider {
             .allowHardware(!auto.imageRgb565)
             .allowRgb565(auto.imageRgb565)
             // Pas de fondu sur l'entrée de gamme : c'est une animation par image chargée.
-            .crossfade(!low)
+            // Ni fondu sur télévision : le défilement à la télécommande déclenche des dizaines de chargements, chacun avec
+            // une animation d'alpha par image (SlotImage fait de même).
+            .crossfade(!low && !com.ultratv.tv.nativeapp.ui.common.isTelevision(this))
             .build()
     }
 
@@ -97,6 +99,8 @@ class UltraTvApp : Application(), ImageLoaderFactory, Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // Départ de la mesure « démarrage à froid » (jusqu'à la première image affichée sur un écran).
+        com.ultratv.tv.nativeapp.perf.PerfTelemetry.markAppCreate()
 
         // Tell RemoteLog who we are before anyone calls it.
         // Version lue dans BuildConfig : pas d'appel système (Binder) synchrone avant le premier écran.

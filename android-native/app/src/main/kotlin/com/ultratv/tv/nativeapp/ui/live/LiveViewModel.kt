@@ -1,6 +1,7 @@
 package com.ultratv.tv.nativeapp.ui.live
 
 import com.ultratv.tv.nativeapp.data.repo.atMostEvery
+import com.ultratv.tv.nativeapp.data.repo.snapshotWhile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
@@ -63,6 +64,7 @@ class LiveViewModel @Inject constructor(
     private val adaptive: com.ultratv.tv.nativeapp.adaptive.AdaptiveProfile,
     private val profiles: com.ultratv.tv.nativeapp.data.profile.ProfileRepository,
     private val syncCoordinator: SyncCoordinator,
+    syncBus: com.ultratv.tv.nativeapp.data.repo.SyncStatusBus,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appCtx: android.content.Context,
 ) : ViewModel() {
 
@@ -72,6 +74,9 @@ class LiveViewModel @Inject constructor(
 
     private val providers = provider.observeProviders().distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Synchro en cours : compteurs lus une seule fois au lieu d'être relancés (GROUP BY sur ~55 000 chaînes) à chaque lot inséré. */
+    private val syncing: Flow<Boolean> = syncBus.status.map { it != null }.distinctUntilChanged()
 
     private val pid: Flow<Long?> = providers.map { ps -> (ps.firstOrNull { it.active } ?: ps.firstOrNull())?.id }.distinctUntilChanged()
 
@@ -86,7 +91,7 @@ class LiveViewModel @Inject constructor(
             if (id == null) flowOf(emptyList())
             else combine(
                 catalog.categories(id, "LIVE"),
-                channelDao.observeCategoryCounts(id).atMostEvery(1_000),
+                channelDao.observeCategoryCounts(id).atMostEvery(1_000).snapshotWhile(syncing),
                 catalog.favoriteCount(id, "LIVE"),
             ) { cats: List<CategoryEntity>, counts, favCount ->
                 val byId = counts.associate { it.categoryId to it.n }
@@ -107,7 +112,7 @@ class LiveViewModel @Inject constructor(
     val langView: StateFlow<com.ultratv.tv.nativeapp.data.repo.LangView> = _langView
     fun toggleLang(code: String) { _langView.value = _langView.value.toggle(code) }
     fun clearLangView() { _langView.value = com.ultratv.tv.nativeapp.data.repo.LangView.ALL }
-    val langCounts: StateFlow<List<com.ultratv.tv.nativeapp.data.db.LangCount>> = pid.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else channelDao.observeLangCounts(id).atMostEvery(1_000) }
+    val langCounts: StateFlow<List<com.ultratv.tv.nativeapp.data.db.LangCount>> = pid.flatMapLatest { id -> if (id == null) flowOf(emptyList()) else channelDao.observeLangCounts(id).atMostEvery(1_000).snapshotWhile(syncing) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Chaînes de la catégorie choisie, paginées (Paging 3 sur Room : seules les lignes visibles sont chargées). */

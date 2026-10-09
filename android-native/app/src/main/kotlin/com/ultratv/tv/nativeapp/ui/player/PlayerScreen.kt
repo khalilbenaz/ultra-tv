@@ -383,6 +383,7 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, onHome: (() -> 
             settings = { vm.resolved(latestPrefs) }, memory = vm.memory, network = vm.network,
             isLive = isLive, autoFrameRate = p.autoFrameRate, userAgent = "UltraTV/1.0 (Android TV)",
             subtitles = { subVm.current },
+            uiLanguage = { if (latestPrefs.language == "system") java.util.Locale.getDefault().language else latestPrefs.language },
         )
     }
     val state by session.state.collectAsState()
@@ -780,6 +781,7 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, onHome: (() -> 
         if (panel == Panel.Subtitles) {
             val eng = session.engine
             var subTracks by remember { mutableStateOf(eng?.subtitleTracks().orEmpty()) }
+            androidx.compose.runtime.LaunchedEffect(eng) { while (true) { kotlinx.coroutines.delay(1_000); eng?.subtitleTracks()?.let { subTracks = it } } }
             var needsRestart by remember { mutableStateOf(false) }
             val closeSubs = { panel = Panel.None; if (needsRestart) session.retry() }     // VLC : le style se fixe à la création du moteur
             com.ultratv.tv.nativeapp.ui.player.subtitles.SubtitlePanel(
@@ -1027,8 +1029,10 @@ private fun PlayerSidePanel(
 ) {
     var tab by remember { mutableStateOf(initial) }
     val e = session.engine
-    val audio = remember { e?.audioTracks().orEmpty() }
-    val subs = remember { e?.subtitleTracks().orEmpty() }
+    // Les pistes se découvrent à l'analyse du flux (parfois après l'ouverture du panneau) : liste relue tant qu'il est ouvert.
+    var audio by remember { mutableStateOf(e?.audioTracks().orEmpty()) }
+    var subs by remember { mutableStateOf(e?.subtitleTracks().orEmpty()) }
+    androidx.compose.runtime.LaunchedEffect(e) { while (true) { audio = e?.audioTracks().orEmpty(); subs = e?.subtitleTracks().orEmpty(); kotlinx.coroutines.delay(1_000) } }
     val labels = listOf(SideTab.TRACKS to D.pTracks, SideTab.DISPLAY to D.pDisplay, SideTab.PLAYER to D.pPlayer, SideTab.STATS to D.statsShort)
     val touch = com.ultratv.tv.nativeapp.ui.mobile.LocalTouch.current
     ModalFocusScope(onBack = onClose, modifier = Modifier.background(androidx.compose.ui.graphics.Color.Transparent), contentAlignment = Alignment.CenterEnd) {
@@ -1054,7 +1058,7 @@ private fun PlayerSidePanel(
                     SideTab.TRACKS -> {
                         OptionGroup(D.audio) {
                             if (audio.isEmpty()) OptionRow("—", null, false) {}
-                            audio.forEach { t -> OptionRow(t.label, null, t.selected) { e?.selectAudio(t.id); onClose() } }
+                            audio.forEach { t -> OptionRow(t.label, null, t.selected) { session.selectAudio(t.id); onClose() } }
                         }
                         OptionGroup(D.subtitles) {
                             OptionRow(D.off, null, subs.none { it.selected }) { e?.selectSubtitle(null); onSubsChoice(false); onClose() }

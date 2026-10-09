@@ -66,6 +66,8 @@ fun SlotImage(
     onFail: (() -> Unit)? = null,
 ) {
     val lowRam = LocalLowRam.current
+    // Fondu seulement au toucher : à la télécommande, chaque vignette chargée en défilement lançait une animation d'alpha.
+    val fade = !lowRam && com.ultratv.tv.nativeapp.ui.mobile.LocalTouch.current
     var loaded by remember(url) { mutableStateOf(false) }
     Box(modifier.clip(shape).background(background), contentAlignment = Alignment.Center) {
         if (!loaded && name.isNotBlank()) {
@@ -78,7 +80,7 @@ fun SlotImage(
             val ctx = LocalContext.current
             // Requête construite une fois par (url, mode) : la recréer à chaque recomposition (focus) coûtait une allocation
             // et une comparaison de modèle par vignette visible.
-            val request = androidx.compose.runtime.remember(url, lowRam) { ImageRequest.Builder(ctx).data(url).crossfade(!lowRam).build() }
+            val request = androidx.compose.runtime.remember(url, fade) { ImageRequest.Builder(ctx).data(url).crossfade(fade).build() }
             AsyncImage(
                 model = request,
                 contentDescription = null,

@@ -279,6 +279,10 @@ interface MovieDao {
     @Query("SELECT * FROM movie WHERE providerId = :pid ORDER BY addedKey DESC LIMIT :limit")
     fun observeLatest(pid: Long, limit: Int): Flow<List<MovieEntity>>
 
+    /** Instantané des derniers ajoutés (chaîne « Nouveautés » de Google TV : relue à la FIN d'une synchro, pas observée). */
+    @Query("SELECT * FROM movie WHERE providerId = :pid ORDER BY addedKey DESC LIMIT :limit")
+    suspend fun latest(pid: Long, limit: Int): List<MovieEntity>
+
     /** Rangée d'une catégorie (accueil Films) : les plus récents d'abord. */
     @Query("SELECT * FROM movie WHERE providerId = :pid AND categoryId = :cat ORDER BY addedKey DESC LIMIT :limit")
     fun observeRow(pid: Long, cat: String, limit: Int): Flow<List<MovieEntity>>
@@ -354,6 +358,9 @@ interface SeriesDao {
     /** Dernières ajoutées : l'identifiant Xtream (series_id) croît à chaque ajout du fournisseur. */
     @Query("SELECT * FROM series WHERE providerId = :pid ORDER BY addedKey DESC LIMIT :limit")
     fun observeLatest(pid: Long, limit: Int): Flow<List<SeriesEntity>>
+
+    @Query("SELECT * FROM series WHERE providerId = :pid ORDER BY addedKey DESC LIMIT :limit")
+    suspend fun latest(pid: Long, limit: Int): List<SeriesEntity>
 
     /** Rangée d'une catégorie (accueil Séries) : les plus récentes d'abord. */
     @Query("SELECT * FROM series WHERE providerId = :pid AND categoryId = :cat ORDER BY addedKey DESC LIMIT :limit")

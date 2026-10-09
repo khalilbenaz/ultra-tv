@@ -54,6 +54,7 @@ class GoogleTvSync @Inject constructor(
     private val movies: com.ultratv.tv.nativeapp.data.db.MovieDao,
     private val seriesDao: com.ultratv.tv.nativeapp.data.db.SeriesDao,
     private val prefsStore: com.ultratv.tv.nativeapp.data.prefs.UserPreferencesStore,
+    private val providerDao: com.ultratv.tv.nativeapp.data.db.ProviderDao,
 ) {
     private val isTv = ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
     private val prefs = ctx.getSharedPreferences("google_tv", Context.MODE_PRIVATE)
@@ -114,8 +115,19 @@ class GoogleTvSync @Inject constructor(
         }
     }
 
-    private fun latestFlow(pid: Long) = combine(movies.observeLatest(pid, NewsChannelPlan.FETCH), seriesDao.observeLatest(pid, NewsChannelPlan.FETCH)) { ms, ss ->
-        NewsChannelPlan.select(
+    /**
+     * Nouveautés : relues quand l'horodatage de synchro du catalogue CHANGE (fin d'une synchro de films / séries), plus à
+     * chaque lot inséré. Avant, observer les tables movie / series relançait deux requêtes (et la sélection) à chaque lot
+     * d'une synchro de dizaines de milliers de lignes, sur le même fichier de base que l'interface — le debounce en aval
+     * ne limitait que la publication, pas ce travail.
+     */
+    private fun latestFlow(pid: Long): kotlinx.coroutines.flow.Flow<List<NewsChannelPlan.Item>> =
+        providerDao.observeCatalogStamp(pid).distinctUntilChanged().map { latestNow(pid) }
+
+    private suspend fun latestNow(pid: Long): List<NewsChannelPlan.Item> {
+        val ms = movies.latest(pid, NewsChannelPlan.FETCH)
+        val ss = seriesDao.latest(pid, NewsChannelPlan.FETCH)
+        return NewsChannelPlan.select(
             ms.map { NewsChannelPlan.Item(NewsChannelPlan.Kind.MOVIE, it.providerId, it.remoteId, it.title, it.poster, it.addedKey) },
             ss.map { NewsChannelPlan.Item(NewsChannelPlan.Kind.SERIES, it.providerId, it.remoteId, it.title, it.poster, it.addedKey) },
         )
@@ -143,7 +155,7 @@ class GoogleTvSync @Inject constructor(
             val favs = favorites.observeForKind(prof, pid, "LIVE").first()
             syncFavoritesChannel(FavoritesChannelPlan.select(orderedByRemote(pid, favs.map { it.remoteId }), orderedByRemote(pid, WatchNextPlan.selectLive(hist).map { it.remoteId })))
         }.onFailure { fail("favorites", "favorites channel", it) }
-        runCatching { syncNewsChannel(latestFlow(pid).first()) }.onFailure { fail("news", "news channel", it) }
+        runCatching { syncNewsChannel(latestNow(pid)) }.onFailure { fail("news", "news channel", it) }
     }
 
     /** Chaînes dans l'ordre des identifiants donnés (la requête par lot ne garantit pas l'ordre). */

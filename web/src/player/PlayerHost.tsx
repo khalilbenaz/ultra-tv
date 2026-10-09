@@ -20,6 +20,7 @@ import { Icon } from "@/ui/Icon";
 import { parseEpisodes } from "@/screens/Detail";
 import type { SeriesInfo } from "@/net/xtream";
 import { LiveReconnect } from "./reconnect";
+import { effectivePreferred } from "./trackChoice";
 import { PlayerEngine, type PlayState, type Stats, type Tracks } from "./engine";
 import { candidates, type Candidate } from "./resolve";
 import { AudioWatcher, nextAudioFallback, readAudioSample, revertToSilent } from "./audio";
@@ -116,6 +117,8 @@ export function PlayerHost() {
       onTracks: setTracks,
     });
     engineRef.current = eng;
+    eng.uiLang = usePrefs.getState().lang;
+    eng.preferredAudio = effectivePreferred([], usePrefs.getState().lang);
     v.volume = usePrefs.getState().volume;
     v.muted = usePrefs.getState().muted;
     return () => { recon.dispose(); eng.stop(); engineRef.current = null; };

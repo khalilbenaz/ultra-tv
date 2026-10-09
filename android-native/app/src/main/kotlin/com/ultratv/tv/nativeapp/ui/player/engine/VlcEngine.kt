@@ -54,7 +54,9 @@ class VlcEngine(private val ctx: Context, override val config: EngineConfig) : P
             when (e.type) {
                 MediaPlayer.Event.Buffering -> _events.tryEmit(if (e.buffering >= 100f) EngineEvent.Ready else EngineEvent.Buffering)
                 MediaPlayer.Event.Playing -> _events.tryEmit(EngineEvent.Ready)
-                MediaPlayer.Event.Vout -> if (e.voutCount > 0 && !firstFrame) { firstFrame = true; _events.tryEmit(EngineEvent.FirstFrame); autoSelectTracks() }
+                MediaPlayer.Event.Vout -> if (e.voutCount > 0 && !firstFrame) { firstFrame = true; _events.tryEmit(EngineEvent.FirstFrame); autoSelectTracks(); applySavedDelay() }
+                // Les pistes arrivent au fil de l'analyse du flux (souvent APRÈS la première image) : on réessaie à chaque ajout.
+                MediaPlayer.Event.ESAdded -> if (!released) autoSelectTracks()
                 MediaPlayer.Event.EndReached -> _events.tryEmit(EngineEvent.Ended)
                 // LibVLC n'expose pas de code : on classe selon qu'une image est déjà passée.
                 MediaPlayer.Event.EncounteredError -> _events.tryEmit(EngineEvent.Error(if (firstFrame) PlayErrorKind.NETWORK else PlayErrorKind.FORMAT))
@@ -62,26 +64,38 @@ class VlcEngine(private val ctx: Context, override val config: EngineConfig) : P
         }
     }
 
-    /** Choix automatique audio / sous-titres selon les listes de langues préférées + décalage enregistré. */
+    @Volatile private var audioManual = false
+    @Volatile private var textManual = false
+    private var lastAutoAudio: String? = null
+    private var textOffDone = false
+    private var lastAutoText: String? = null
+
+    /**
+     * Choix automatique audio / sous-titres selon les langues préférées. LibVLC n'a aucune préférence automatique :
+     * il joue la première piste (souvent l'anglaise). Jamais de remplacement d'un choix manuel de la séance.
+     */
     private fun autoSelectTracks() {
-        val picker = com.ultratv.tv.nativeapp.data.subtitles.TrackLanguagePicker
-        if (config.preferredAudio.isNotEmpty()) {
+        val tc = com.ultratv.tv.nativeapp.data.subtitles.TrackChoice
+        if (!audioManual && config.preferredAudio.isNotEmpty()) {
             val tracks = mp.audioTracks.orEmpty().filter { it.id >= 0 }
-            if (tracks.size > 1) picker.pick(tracks.map { it.id.toString() to it.name }, config.preferredAudio)?.let { mp.audioTrack = it.toInt() }
+            if (tracks.size > 1) tc.bestIndex(tracks.map { com.ultratv.tv.nativeapp.data.subtitles.TrackChoice.Candidate(null, it.name) }, config.preferredAudio)?.let { tracks[it] }
+                ?.takeIf { it.id != mp.audioTrack && lastAutoAudio != it.id.toString() }?.let { lastAutoAudio = it.id.toString(); mp.audioTrack = it.id }
         }
-        if (config.textOff) mp.spuTrack = -1
-        else if (config.preferredText.isNotEmpty()) {
+        if (!textManual) {
             val tracks = mp.spuTracks.orEmpty().filter { it.id >= 0 }
-            picker.pick(tracks.map { it.id.toString() to it.name }, config.preferredText)?.let { mp.spuTrack = it.toInt() }
+            if (config.textOff) { if (!textOffDone && tracks.isNotEmpty()) { textOffDone = true; mp.spuTrack = -1 } }
+            else if (config.preferredText.isNotEmpty()) tc.bestIndex(tracks.map { com.ultratv.tv.nativeapp.data.subtitles.TrackChoice.Candidate(null, it.name) }, config.preferredText)?.let { tracks[it] }
+                ?.takeIf { it.id != mp.spuTrack && lastAutoText != it.id.toString() }?.let { lastAutoText = it.id.toString(); mp.spuTrack = it.id }
         }
-        if (config.subtitleStyle.delayMs != 0) setSubtitleDelay(config.subtitleStyle.delayMs)
     }
+
+    private fun applySavedDelay() { if (config.subtitleStyle.delayMs != 0) setSubtitleDelay(config.subtitleStyle.delayMs) }
 
     /** Les options `--freetype-*` se fixent à la création de LibVLC : appliquées au prochain démarrage du moteur. */
     override fun applySubtitleStyle(style: com.ultratv.tv.nativeapp.data.subtitles.SubtitleStyle): Boolean = false
     override fun setSubtitleDelay(ms: Int): Boolean { mp.setSpuDelay(ms * 1000L); return true }
     override fun addExternalSubtitle(path: String): Boolean =
-        mp.addSlave(org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle, Uri.fromFile(java.io.File(path)), true)
+        mp.addSlave(org.videolan.libvlc.interfaces.IMedia.Slave.Type.Subtitle, Uri.fromFile(java.io.File(path)), true).also { textManual = true }
 
     /** Zapping : le MÊME LibVLC / MediaPlayer enchaîne le média suivant (options de cache posées par média). */
     override val reusable: Boolean get() = true
@@ -89,6 +103,7 @@ class VlcEngine(private val ctx: Context, override val config: EngineConfig) : P
     override fun load(url: String, startPositionMs: Long) {
         if (released) return
         firstFrame = false
+        audioManual = false; textManual = false; textOffDone = false; lastAutoAudio = null; lastAutoText = null
         // Flux précédent arrêté AVANT d'ouvrir le suivant (connexion unique du fournisseur).
         if (mp.media != null) runCatching { mp.stop() }
         val media = Media(libVlc, Uri.parse(url)).apply {
@@ -117,10 +132,18 @@ class VlcEngine(private val ctx: Context, override val config: EngineConfig) : P
     override val positionMs get() = if (released) 0L else mp.time.coerceAtLeast(0)
     override val durationMs get() = if (released) -1L else mp.length.takeIf { it > 0 } ?: -1L
 
-    override fun audioTracks(): List<TrackInfo> = mp.audioTracks.orEmpty().filter { it.id >= 0 }.map { TrackInfo(it.id.toString(), it.name, it.id == mp.audioTrack) }
-    override fun subtitleTracks(): List<TrackInfo> = mp.spuTracks.orEmpty().filter { it.id >= 0 }.map { TrackInfo(it.id.toString(), it.name, it.id == mp.spuTrack) }
-    override fun selectAudio(id: String) { mp.audioTrack = id.toInt() }
-    override fun selectSubtitle(id: String?) { mp.spuTrack = id?.toInt() ?: -1 }
+    private fun vlcTracks(list: Array<org.videolan.libvlc.MediaPlayer.TrackDescription>?, selected: Int): List<TrackInfo> {
+        val tc = com.ultratv.tv.nativeapp.data.subtitles.TrackChoice
+        val ui = java.util.Locale(config.uiLanguage)
+        // L'entrée « Désactiver » (id -1) est retirée : le panneau propose son propre « Désactivés ».
+        return list.orEmpty().filter { it.id >= 0 }.mapIndexed { i, t ->
+            TrackInfo(t.id.toString(), tc.humanLabel(null, t.name, null, 0, false, i + 1, ui), t.id == selected, tc.languageFromLabel(t.name))
+        }
+    }
+    override fun audioTracks(): List<TrackInfo> = if (released) emptyList() else vlcTracks(mp.audioTracks, mp.audioTrack)
+    override fun subtitleTracks(): List<TrackInfo> = if (released) emptyList() else vlcTracks(mp.spuTracks, mp.spuTrack)
+    override fun selectAudio(id: String) { audioManual = true; mp.audioTrack = id.toInt() }
+    override fun selectSubtitle(id: String?) { textManual = true; mp.spuTrack = id?.toInt() ?: -1 }
 
     override fun setAspect(mode: AspectMode) {
         mp.setAspectRatio(null)

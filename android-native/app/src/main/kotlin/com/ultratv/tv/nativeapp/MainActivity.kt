@@ -110,11 +110,13 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         com.ultratv.tv.nativeapp.ui.common.AppForeground.visible = false
+        com.ultratv.tv.nativeapp.perf.PerfTelemetry.setTracking(false)
     }
 
     override fun onStart() {
         super.onStart()
         com.ultratv.tv.nativeapp.ui.common.AppForeground.visible = true
+        com.ultratv.tv.nativeapp.perf.PerfTelemetry.setTracking(true)
         // Retour sur l'appli (sortie de veille comprise) : guide rechargé s'il est périmé — l'appli reste en mémoire
         // des jours sur une box et le guide ne couvre que les 24 h suivant sa synchro.
         if (::providerRepo.isInitialized) providerRepo.refreshEpgIfStale()
@@ -141,6 +143,7 @@ class MainActivity : ComponentActivity() {
             runCatching { recordingScheduler.rearmAll() }
         }
         setContent { Root() }
+        com.ultratv.tv.nativeapp.perf.PerfTelemetry.attach(this)
         // Android 12+ : le geste « accueil » entre en image dans l'image sans passer par onUserLeaveHint, tant que le lecteur est affiché.
         if (android.os.Build.VERSION.SDK_INT >= 31 && !com.ultratv.tv.nativeapp.ui.common.isTelevision(this)) {
             lifecycleScope.launch {
@@ -506,6 +509,7 @@ private fun NavGraph(nav: androidx.navigation.NavHostController) {
     androidx.compose.runtime.LaunchedEffect(nav) {
         nav.currentBackStackEntryFlow.collect { entry ->
             RemoteLog.info("nav", "→ ${entry.destination.route ?: "(unknown)"}")
+            com.ultratv.tv.nativeapp.perf.PerfTelemetry.onRoute(entry.destination.route)
         }
     }
     NavHost(
