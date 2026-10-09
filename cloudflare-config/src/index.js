@@ -36,7 +36,7 @@ import {
 } from "./trakt.js";
 import { LIB_TTL_S, LANGS, fetchTraktLibrary, enrichTitles, libraryForDevice } from "./traktlib.js";
 import { fontResponse } from "./fonts.js";
-import { loginPage, signupPage, pairPage, dashboardPage, eventsPage, crashesPage } from "./pages.js";
+import { loginPage, signupPage, pairPage, dashboardPage, eventsPage, crashesPage, adminPage } from "./pages.js";
 
 export { Guard };
 
@@ -178,10 +178,11 @@ async function route(req, env, ctx) {
   // ---- tableau de bord (session) ----
   const sess = await currentSession(req, env);
   const dashboardRoute = (path === "/" || path === "/dashboard") && m === "GET";
+  const adminRoute = (path === "/admin" || path === "/admin/comptes.csv") && m === "GET";
   const pairRoute = path === "/pair" && m === "GET";
   const mutating = m === "POST" && ["/pair", "/providers", "/password", "/account/delete", "/logout", "/subtitles/link", "/subtitles/unlink", "/trakt/connect", "/trakt/disconnect"].includes(path)
     || (m === "POST" && /^\/(devices\/[0-9a-f]+\/(revoke|rename)|providers\/[0-9a-f]+\/(delete|assign|link|account))$/.test(path));
-  if (!dashboardRoute && !pairRoute && !mutating) return new Response("Not found", { status: 404 });
+  if (!dashboardRoute && !pairRoute && !adminRoute && !mutating) return new Response("Not found", { status: 404 });
   if (!sess) {
     const c = pairRoute ? normalizeCode(url.searchParams.get("code")) : null;
     return redirect(c ? `/login?next=${encodeURIComponent(`/pair?code=${c}`)}` : "/login");
@@ -194,10 +195,23 @@ async function route(req, env, ctx) {
     return pairPage(nonce(), { acct: sess.acct, csrf: sess.csrf, code: c, invalid: Boolean(raw) && !c });
   }
 
+  if (adminRoute) {
+    // Réservé aux identifiants listés dans ADMIN_LOGINS ; tout autre compte reçoit un 404 (l'existence n'est pas révélée).
+    if (!isAdmin(env, sess.acct)) return new Response("Not found", { status: 404 });
+    const rows = await adminAccounts(env);
+    if (path.endsWith(".csv")) {
+      return new Response(adminCsv(rows), { headers: {
+        "content-type": "text/csv; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff",
+        "content-disposition": `attachment; filename="ultratv-comptes-${new Date().toISOString().slice(0, 10)}.csv"`,
+      } });
+    }
+    return adminPage(nonce(), { rows, me: sess.acct.login });
+  }
+
   if (dashboardRoute) {
     const n = nonce();
     const providers = await loadProviders(env, sess.acct);
-    return dashboardPage(n, { acct: sess.acct, providers, csrf: sess.csrf, err: url.searchParams.get("e"), ok: url.searchParams.get("m") });
+    return dashboardPage(n, { acct: sess.acct, providers, csrf: sess.csrf, err: url.searchParams.get("e"), ok: url.searchParams.get("m"), admin: isAdmin(env, sess.acct) });
   }
 
   // Mutations : Origin + jeton CSRF + débit par compte.
@@ -352,7 +366,22 @@ async function doLogin(req, env) {
     delete acct.salt;
     await putAccount(env, acct);
   }
+  // Dernière connexion et pays (code Cloudflare, jamais l'adresse IP) : vue d'administration.
+  const country = countryOf(req);
+  if (Date.now() - (acct.lastLoginAt || 0) > 3600_000 || (country && acct.country !== country)) {
+    await withAccountLock(env, acct.login, async (a) => {
+      a.lastLoginAt = Date.now();
+      if (country) a.country = country;
+      await putAccount(env, a);
+    });
+  }
   return startSession(env, acct, to);
+}
+
+/** Pays de la requête (code ISO à 2 lettres fourni par Cloudflare), ou null. L'adresse IP n'est jamais gardée. */
+function countryOf(req) {
+  const c = req.cf && req.cf.country;
+  return typeof c === "string" && /^[A-Z]{2}$/.test(c) ? c : null;
 }
 
 async function doSignup(req, env) {
@@ -372,7 +401,7 @@ async function doSignup(req, env) {
   if (isMacLogin(login) && (await env.CONFIG.get(login)) !== null) return redirect(`/signup?e=taken${nextQuery(to)}`);
   if (!(await guardStub(env, `acct:${login}`).claim())) return redirect(`/signup?e=taken${nextQuery(to)}`);
   try {
-    const acct = { login, passwordHash: await hashPassword(password), devices: [], sessEpoch: 0, createdAt: Date.now() };
+    const acct = { login, passwordHash: await hashPassword(password), devices: [], sessEpoch: 0, createdAt: Date.now(), country: countryOf(req) };
     await saveProviders(env, acct, []);
     await putAccount(env, acct);
     return await startSession(env, acct, to);
@@ -470,6 +499,69 @@ async function changePassword(env, acct, form, req) {
   acct.sessEpoch = (acct.sessEpoch || 0) + 1; // toutes les anciennes sessions meurent
   await putAccount(env, acct);
   return startSession(env, acct, "/?m=pw");
+}
+
+// ---- administration ---------------------------------------------------------------
+
+function isAdmin(env, acct) {
+  const list = String(env.ADMIN_LOGINS || "").split(",").map((x) => x.trim()).filter(Boolean);
+  return Boolean(acct && list.includes(acct.login));
+}
+
+const LEGACY_LOGIN = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/;
+
+/**
+ * Vue d'administration : métadonnées des comptes, JAMAIS de secret (empreinte de mot de passe, sources chiffrées,
+ * jetons Trakt / OpenSubtitles exclus). Lecture de tous les comptes (au plus 2000), 50 en parallèle.
+ */
+async function adminAccounts(env) {
+  const names = [];
+  let cursor;
+  do {
+    const page = await env.CONFIG.list({ prefix: "acct:", cursor });
+    names.push(...page.keys.map((k) => k.name));
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor && names.length < 2000);
+  const rows = [];
+  for (let i = 0; i < names.length; i += 50) {
+    const got = await Promise.all(names.slice(i, i + 50).map((n) => env.CONFIG.get(n)));
+    for (const raw of got) {
+      let a;
+      try { a = JSON.parse(raw); } catch { continue; }
+      if (!a || !a.login) continue;
+      const devices = (a.devices || []).map((d) => ({
+        name: d.name || "", model: d.label || "", edition: d.edition || "standard", lastSeen: d.lastSeen || 0,
+        country: d.country || null, createdAt: d.createdAt || 0,
+      }));
+      rows.push({
+        login: a.login,
+        legacy: LEGACY_LOGIN.test(a.login),
+        createdAt: a.createdAt || 0,
+        lastLoginAt: a.lastLoginAt || 0,
+        country: a.country || null,
+        devices,
+        lastSeen: Math.max(0, ...devices.map((d) => d.lastSeen)),
+        sources: Boolean(a.providersEnc),
+        trakt: a.traktEnc ? (a.trakt && a.trakt.user) || "oui" : "",
+        opensubtitles: (a.os && a.os.user) || "",
+      });
+    }
+  }
+  rows.sort((x, y) => (x.legacy - y.legacy) || (y.createdAt - x.createdAt));
+  return rows;
+}
+
+function adminCsv(rows) {
+  const d = (t) => (t ? new Date(t).toISOString().slice(0, 16).replace("T", " ") : "");
+  // Cellules neutralisées contre l'injection de formules (=, +, -, @ en tête) et échappées.
+  const cell = (v) => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
+  const head = ["compte", "type", "email", "cree_le", "derniere_connexion", "pays_compte", "nb_appareils", "appareils", "derniere_activite", "pays_appareils", "sources", "trakt", "opensubtitles"];
+  const lines = rows.map((r) => [
+    r.login, r.legacy ? "ancien (adresse MAC)" : "inscrit", r.login.includes("@") ? r.login : "", d(r.createdAt), d(r.lastLoginAt), r.country || "",
+    r.devices.length, r.devices.map((x) => `${x.name} (${x.model}, ${x.edition}${x.lastSeen ? `, vu ${d(x.lastSeen)}` : ""})`).join(" | "),
+    d(r.lastSeen), [...new Set(r.devices.map((x) => x.country).filter(Boolean))].join(" "), r.sources ? "oui" : "non", r.trakt, r.opensubtitles,
+  ].map(cell).join(";"));
+  return "\ufeff" + [head.join(";"), ...lines].join("\r\n") + "\r\n";
 }
 
 // ---- Trakt (facultatif) ---------------------------------------------------------
@@ -726,9 +818,15 @@ const EDITIONS = new Set(["standard", "pro"]);
 
 /** Édition de l'appli (en-tête X-Ultra-Edition) : enregistrée seulement quand elle change (écriture rare). */
 async function noteEdition(req, env, auth) {
+  // Édition, dernière activité (à l'heure près : une écriture au plus par heure) et pays de l'appareil.
   const ed = (req.headers.get("x-ultra-edition") || "").trim().toLowerCase();
-  if (!EDITIONS.has(ed) || auth.device.edition === ed) return;
-  await withAccountLock(env, auth.acct.login, (acct) => setDeviceInfo(env, acct, auth.device.id, { edition: ed }));
+  const patch = {};
+  if (EDITIONS.has(ed) && auth.device.edition !== ed) patch.edition = ed;
+  if (Date.now() - (auth.device.lastSeen || 0) > 3600_000) patch.lastSeen = Date.now();
+  const country = countryOf(req);
+  if (country && auth.device.country !== country) patch.country = country;
+  if (!Object.keys(patch).length) return;
+  await withAccountLock(env, auth.acct.login, (acct) => setDeviceInfo(env, acct, auth.device.id, patch));
 }
 
 /**
@@ -971,6 +1069,8 @@ async function ingest(req, env, kind) {
     mac: sanitizeText(b.mac, 32) || null, // étiquette fournie par l'appareil, non fiable
     version: sanitizeText(b.version, 32) || null, versionCode: int(b.versionCode),
     device: sanitizeText(b.device, 128) || null,
+    // Compte et pays : relier un relevé à son propriétaire dans la vue d'exploitation (jamais l'adresse IP).
+    acct: auth.acct.login, country: countryOf(req),
   };
   const key = `${kind}:${base.ts}:${rand(6)}`;
   const entry = isCrash

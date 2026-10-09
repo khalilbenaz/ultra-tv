@@ -9,7 +9,9 @@ const CSS = `
 @font-face{font-family:Sora;src:url(/assets/sora.woff2) format("woff2");font-weight:100 800;font-display:swap}
 @font-face{font-family:Manrope;src:url(/assets/manrope.woff2) format("woff2");font-weight:200 800;font-display:swap}
 :root{color-scheme:dark light;--bg:#0A0A0C;--s1:#141418;--s2:#1C1C21;--bd:#26262D;--fg:#F5F5F7;--fg2:#C4C4CC;--mut:#A1A1AA;--acc:#D91E2B;--acc-h:#EB2F3C;--on-acc:#fff;--acc-soft:rgba(217,30,43,.14);--acc-fg:#FF6B74;--dng:#FF6B74;--ok:#4ADE80;--ok-soft:rgba(74,222,128,.12);--ring:#FF8A92;--glow:rgba(217,30,43,.16);--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.35);--fr:#F5F5F7;--ff:Manrope,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--fh:Sora,Manrope,system-ui,sans-serif}
-@media (prefers-color-scheme:light){:root{--bg:#F6F6F8;--s1:#FFFFFF;--s2:#F0F0F3;--bd:#E1E1E7;--fg:#121216;--fg2:#3A3A44;--mut:#5B5B66;--acc-h:#B9141F;--acc-soft:rgba(217,30,43,.08);--acc-fg:#C4121E;--dng:#B4121D;--ok:#15803D;--ok-soft:rgba(21,128,61,.09);--ring:#D91E2B;--glow:rgba(217,30,43,.07);--shadow:0 1px 2px rgba(18,18,22,.05),0 8px 24px rgba(18,18,22,.06);--fr:#121216}}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]){--bg:#F6F6F8;--s1:#FFFFFF;--s2:#F0F0F3;--bd:#E1E1E7;--fg:#121216;--fg2:#3A3A44;--mut:#5B5B66;--acc-h:#B9141F;--acc-soft:rgba(217,30,43,.08);--acc-fg:#C4121E;--dng:#B4121D;--ok:#15803D;--ok-soft:rgba(21,128,61,.09);--ring:#D91E2B;--glow:rgba(217,30,43,.07);--shadow:0 1px 2px rgba(18,18,22,.05),0 8px 24px rgba(18,18,22,.06);--fr:#121216}}
+:root[data-theme=light]{color-scheme:light;--bg:#F6F6F8;--s1:#FFFFFF;--s2:#F0F0F3;--bd:#E1E1E7;--fg:#121216;--fg2:#3A3A44;--mut:#5B5B66;--acc-h:#B9141F;--acc-soft:rgba(217,30,43,.08);--acc-fg:#C4121E;--dng:#B4121D;--ok:#15803D;--ok-soft:rgba(21,128,61,.09);--ring:#D91E2B;--glow:rgba(217,30,43,.07);--shadow:0 1px 2px rgba(18,18,22,.05),0 8px 24px rgba(18,18,22,.06);--fr:#121216}
+:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;min-height:100vh;background:var(--bg) radial-gradient(900px 420px at 50% -140px,var(--glow),transparent 70%) no-repeat;color:var(--fg);font:15px/1.55 var(--ff);padding:0 16px 40px;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
@@ -25,7 +27,11 @@ p{margin:0}
 .brand{white-space:nowrap;flex:none;display:inline-flex;align-items:center;gap:10px;color:var(--fg);font-family:var(--fh);font-weight:700;font-size:18px}
 .logo{width:36px;height:36px;flex:none;display:block}
 .logo .lg-bg{fill:#0A0A0C} .logo .lg-fr{stroke:#F5F5F7}
-@media (prefers-color-scheme:light){.logo .lg-bg{fill:#0A0A0C}}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]) .logo .lg-bg{fill:#0A0A0C}}
+:root[data-theme=light] .logo .lg-bg{fill:#0A0A0C}
+.theme-toggle{position:fixed;right:16px;bottom:16px;z-index:50;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--bd);background:var(--s1);color:var(--fg2);font:600 13px var(--ff);cursor:pointer;box-shadow:var(--shadow)}
+.theme-toggle:hover{color:var(--fg);border-color:var(--mut)}
+.theme-toggle:focus-visible{outline:3px solid var(--ring);outline-offset:2px}
 /* Surfaces */
 .layout{max-width:1120px;margin:0 auto}
 .panel{background:var(--s1);border:1px solid var(--bd);border-radius:20px;padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
@@ -109,6 +115,7 @@ button.block{width:100%}
 .grow{min-width:0;flex:1}
 .kind{display:inline-flex;align-items:center;min-height:22px;padding:0 8px;border-radius:7px;background:var(--acc-soft);color:var(--acc-fg);font:700 11px var(--ff);letter-spacing:.06em;margin-right:6px;vertical-align:1px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+a.button{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:14px;background:var(--acc);color:#fff;font-weight:700;font-size:14px;text-decoration:none}a.button:hover{text-decoration:none;filter:brightness(1.08)}
 .chip{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg2);font-size:12px;font-weight:600}
 .chip.all{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
 .chip.none{color:var(--dng)}
@@ -214,8 +221,16 @@ const ico = (k) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${IC
 const LOGO = `<svg class="logo" viewBox="0 0 512 512" role="img" aria-label="Ultra TV"><rect class="lg-bg" width="512" height="512" rx="116"/><rect class="lg-fr" x="96" y="120" width="320" height="216" rx="40" fill="none" stroke-width="28"/><path d="M224 188v80l70-40z" fill="#D91E2B"/><path class="lg-fr" d="M196 392h120" stroke-width="28" stroke-linecap="round"/></svg>`;
 const FAVICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='116' fill='%230A0A0C'/%3E%3Crect x='96' y='120' width='320' height='216' rx='40' fill='none' stroke='%23F5F5F7' stroke-width='28'/%3E%3Cpath d='M224 188v80l70-40z' fill='%23D91E2B'/%3E%3Cpath d='M196 392h120' stroke='%23F5F5F7' stroke-width='28' stroke-linecap='round'/%3E%3C/svg%3E";
 
+// Thème choisi (Automatique / Clair / Sombre), gardé dans le navigateur ; appliqué AVANT le premier rendu (pas de flash).
+const THEME_HEAD = `try{var t=localStorage.getItem('utv-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}`;
+const THEME_TOGGLE = `(function(){var b=document.getElementById('theme-toggle');if(!b)return;var L={auto:'Thème : automatique',light:'Thème : clair',dark:'Thème : sombre'},O=['auto','light','dark'];
+function cur(){try{return localStorage.getItem('utv-theme')||'auto';}catch(e){return 'auto';}}
+function show(t){b.textContent=L[t];b.setAttribute('aria-label',L[t]+' (changer)');}
+b.addEventListener('click',function(){var t=O[(O.indexOf(cur())+1)%3];try{if(t==='auto')localStorage.removeItem('utv-theme');else localStorage.setItem('utv-theme',t);}catch(e){}
+if(t==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',t);show(t);});show(cur());})();`;
+
 function layout(title, body, n, extra = "", camera = false) {
-  return html(`<!doctype html><html lang="fr"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="robots" content="noindex"/><meta name="color-scheme" content="dark light"/><meta name="theme-color" content="#0A0A0C"/><link rel="icon" href="${FAVICON}"/><title>${e(title)}</title><style nonce="${n}">${CSS}</style></head><body><a class="skip" href="#main">Aller au contenu</a>${body}${extra}</body></html>`, n, 200, { camera });
+  return html(`<!doctype html><html lang="fr"><head><script nonce="${n}">${THEME_HEAD}</script><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="robots" content="noindex"/><meta name="color-scheme" content="dark light"/><meta name="theme-color" content="#0A0A0C"/><link rel="icon" href="${FAVICON}"/><title>${e(title)}</title><style nonce="${n}">${CSS}</style></head><body><a class="skip" href="#main">Aller au contenu</a>${body}<button type="button" class="theme-toggle" id="theme-toggle">Thème</button><script nonce="${n}">${THEME_TOGGLE}</script>${extra}</body></html>`, n, 200, { camera });
 }
 
 const AUTH_ERR = {
@@ -450,7 +465,7 @@ function licenseLine(lic, now = Date.now()) {
   return `<div class="acct card-meta mt10${cls}">Licence Pro : ${parts.join(" · ")}${stale}${contact ? `<br/>${contact}` : ""}</div>`;
 }
 
-export function dashboardPage(n, { acct, providers, csrf, err, ok }) {
+export function dashboardPage(n, { acct, providers, csrf, err, ok, admin = false }) {
   const csrfInput = `<input type="hidden" name="csrf" value="${e(csrf)}"/>`;
   const devices = acct.devices || [];
   const when = (t) => (t ? new Date(t).toISOString().slice(0, 10) : "");
@@ -590,6 +605,7 @@ ${SCAN_JS}
 <a href="#fournisseurs">${ico("list")}Fournisseurs</a>
 <a href="#appareils">${ico("tv")}Appareils</a>
 <a href="#compte">${ico("gear")}Compte</a>
+${admin ? `<a href="/admin">${ico("user")}Administration</a>` : ""}
 </nav>
 <div class="me"><div class="login" title="Compte connecté">${ico("user")}<span>${e(acct.login)}</span></div>
 <form method="post" action="/logout">${csrfInput}<button class="secondary" type="submit">Se déconnecter</button></form></div>
@@ -681,6 +697,49 @@ ${os ? `<p class="mt6">Relié au compte <strong>${e(os.user)}</strong>${quota(os
 }
 
 const fmtTime = (ts) => (ts ? new Date(ts).toISOString().replace("T", " ").slice(0, 19) : "");
+
+/** Drapeau + nom du pays (code ISO à 2 lettres), ou « — ». */
+function countryLabel(code) {
+  if (!code || !/^[A-Z]{2}$/.test(code)) return "—";
+  const flag = String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+  let name = code;
+  try { name = new Intl.DisplayNames(["fr"], { type: "region" }).of(code) || code; } catch { /* ICU absent */ }
+  return `${flag} ${name}`;
+}
+
+/** Administration : comptes, appareils, pays (aucun secret). Réservée aux identifiants de ADMIN_LOGINS. */
+export function adminPage(n, { rows, me, now = Date.now() }) {
+  const d = (t) => (t ? new Date(t).toISOString().slice(0, 16).replace("T", " ") : "—");
+  const signed = rows.filter((r) => !r.legacy);
+  const withDev = rows.filter((r) => r.devices.length);
+  const active7 = rows.filter((r) => r.lastSeen && now - r.lastSeen < 7 * 86400_000);
+  const byCountry = new Map();
+  for (const r of rows) {
+    const cs = new Set([r.country, ...r.devices.map((x) => x.country)].filter(Boolean));
+    if (!cs.size) continue;
+    for (const c of cs) byCountry.set(c, (byCountry.get(c) || 0) + 1);
+  }
+  const countries = [...byCountry].sort((a, b) => b[1] - a[1]).map(([c, k]) => `<span class="chip">${e(countryLabel(c))} · ${k}</span>`).join(" ");
+  const row = (r) => {
+    const cs = [...new Set([r.country, ...r.devices.map((x) => x.country)].filter(Boolean))];
+    const devs = r.devices.map((x) => `${e(x.name)} <span class="muted">(${e(x.model)}${x.edition === "pro" ? ", PRO" : ""}${x.lastSeen ? `, vu ${e(d(x.lastSeen))}` : ""})</span>`).join("<br>");
+    return `<tr data-legacy="${r.legacy ? 1 : 0}"><td><strong>${e(r.login)}</strong>${r.login === me ? ` <span class="kind pro">ADMIN</span>` : ""}</td>
+<td>${r.legacy ? "ancien (MAC)" : "inscrit"}</td><td>${e(d(r.createdAt))}</td><td>${e(d(r.lastLoginAt))}</td><td>${e(d(r.lastSeen))}</td>
+<td>${cs.length ? cs.map((c) => e(countryLabel(c))).join("<br>") : "—"}</td><td>${devs || "—"}</td><td>${r.sources ? "oui" : "non"}</td><td>${e(r.trakt || "—")}</td><td>${e(r.opensubtitles || "—")}</td></tr>`;
+  };
+  const script = `document.getElementById('legacy').addEventListener('change',function(){var on=this.checked;document.querySelectorAll('tr[data-legacy="1"]').forEach(function(t){t.hidden=!on;});});
+document.querySelectorAll('tr[data-legacy="1"]').forEach(function(t){t.hidden=true;});`;
+  return layout("Ultra TV — administration", `<main id="main" class="layout"><header class="topbar"><div class="brand">${LOGO}<span>Administration</span></div><a href="/">Retour au tableau de bord</a></header>
+<div class="tiles"><div class="tile"><b>${signed.length}</b><span>comptes inscrits</span></div>
+<div class="tile"><b>${rows.length - signed.length}</b><span>anciens comptes (adresse MAC)</span></div>
+<div class="tile"><b>${withDev.length}</b><span>comptes avec un appareil</span></div>
+<div class="tile"><b>${active7.length}</b><span>actifs ces 7 jours</span></div></div>
+<p class="mt16"><strong>Pays</strong> ${countries || `<span class="muted">aucun encore : relevé depuis le 9 octobre 2026, à l'inscription, à la connexion et à l'activité des appareils.</span>`}</p>
+<p class="muted small">Aucun mot de passe, aucune source IPTV ni jeton n'apparaît ici. Le pays vient de Cloudflare ; l'adresse IP n'est jamais gardée.</p>
+<div class="row mt16"><a class="button" href="/admin/comptes.csv">Exporter en CSV</a> <label class="small"><input type="checkbox" id="legacy"/> Afficher les anciens comptes (adresse MAC)</label></div>
+<div class="tablewrap mt16"><table><thead><tr><th>Compte</th><th>Type</th><th>Créé le</th><th>Dernière connexion</th><th>Dernière activité</th><th>Pays</th><th>Appareils</th><th>Sources</th><th>Trakt</th><th>OpenSubtitles</th></tr></thead>
+<tbody>${rows.map(row).join("")}</tbody></table></div></main>`, n, `<script nonce="${n}">${script}</script>`);
+}
 
 export function eventsPage(n, items) {
   const rows = items.map((it) => {

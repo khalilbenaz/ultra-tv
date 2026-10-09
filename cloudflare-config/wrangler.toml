@@ -35,5 +35,7 @@ new_sqlite_classes = ["Guard"]
 # Cloudflare. Sans ACCOUNT_RELAY_KEY, il n'est jamais appelé.
 [vars]
 ACCOUNT_RELAY_URL = "https://utv-relay.vercel.app/api/xtream"
+# Comptes ayant accès à /admin (liste séparée par des virgules).
+ADMIN_LOGINS = "khalilbenaz"
 # Application Trakt « UTV » (PKCE, client public : l'identifiant n'est pas un secret, et il n'y a pas de secret client).
 TRAKT_CLIENT_ID = "L6UakaCWI9VuQZevNkAOzKV77d4ob9XRnfLZOPds9Bs"
