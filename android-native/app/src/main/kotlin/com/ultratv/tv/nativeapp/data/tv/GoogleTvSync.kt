@@ -217,7 +217,7 @@ class GoogleTvSync @Inject constructor(
     private fun syncFavoritesChannel(selected: List<com.ultratv.tv.nativeapp.data.db.ChannelEntity>) {
         val helper = PreviewChannelHelper(ctx)
         var channelId = prefs.getLong(K_CHANNEL, -1L)
-        if (ChannelPublishPlan.mustRecreate(channelId, helper.getPreviewChannel(channelId) != null)) {
+        if (ChannelPublishPlan.mustRecreate(channelId, channelExists(channelId))) {
             report("favorites:gone", "favorites channel $channelId missing in provider: recreating", warn = true)
             prefs.edit().remove(K_CHANNEL).remove(K_SIGNATURE).apply()
             channelId = -1L
@@ -231,6 +231,7 @@ class GoogleTvSync @Inject constructor(
                 .setLogo(logo)
                 .build()
             channelId = publishChannel(helper, channel)
+            if (channelId < 0) { report("favorites:publish", "favorites channel publish refused by system (id=$channelId)", warn = true); return }
             prefs.edit().putLong(K_CHANNEL, channelId).remove(K_SIGNATURE).apply()
             report("favorites:created", "favorites channel created id=$channelId default=${prefs.getBoolean(K_DEFAULT_DONE, false)}")
         }
@@ -252,11 +253,24 @@ class GoogleTvSync @Inject constructor(
         report("favorites:programs", "favorites channel id=$channelId programs=${selected.size}")
     }
 
+    /**
+     * La chaîne existe-t-elle encore dans le fournisseur du système ? Requête directe sur son identifiant, jamais
+     * `PreviewChannelHelper.getPreviewChannel` : il lève « Unknown URI …/channel/-1 » (Xiaomi) pour un identifiant
+     * absent, et plante (NullPointerException) sur une chaîne dont un champ est vide (Google TV). Toute erreur = absente.
+     */
+    private fun channelExists(channelId: Long): Boolean {
+        if (channelId < 0) return false
+        return runCatching {
+            ctx.contentResolver.query(TvContractCompat.buildChannelUri(channelId), arrayOf(TvContractCompat.Channels._ID), null, null, null)
+                ?.use { it.moveToFirst() } ?: false
+        }.getOrDefault(false)
+    }
+
     /** La première chaîne publiée par l'appli est la chaîne par défaut (affichée d'office) ; les suivantes sont ordinaires. */
     private fun publishChannel(helper: PreviewChannelHelper, channel: PreviewChannel): Long {
         val hasDefault = prefs.getBoolean(K_DEFAULT_DONE, false) || prefs.getLong(K_CHANNEL, -1L) >= 0
         return when (ChannelPublishPlan.mode(hasDefault)) {
-            ChannelPublishPlan.Mode.DEFAULT -> helper.publishDefaultChannel(channel).also { prefs.edit().putBoolean(K_DEFAULT_DONE, true).apply() }
+            ChannelPublishPlan.Mode.DEFAULT -> helper.publishDefaultChannel(channel).also { if (it >= 0) prefs.edit().putBoolean(K_DEFAULT_DONE, true).apply() }
             ChannelPublishPlan.Mode.NORMAL -> helper.publishChannel(channel)
         }
     }
@@ -291,7 +305,7 @@ class GoogleTvSync @Inject constructor(
     private suspend fun syncNewsChannel(selected: List<NewsChannelPlan.Item>) = newsLock.withLock {
         val helper = PreviewChannelHelper(ctx)
         var channelId = prefs.getLong(K_NEWS_CHANNEL, -1L)
-        if (ChannelPublishPlan.mustRecreate(channelId, helper.getPreviewChannel(channelId) != null)) {
+        if (ChannelPublishPlan.mustRecreate(channelId, channelExists(channelId))) {
             report("news:gone", "news channel $channelId missing in provider: recreating", warn = true)
             prefs.edit().remove(K_NEWS_CHANNEL).remove(K_NEWS_SIGNATURE).apply()
             channelId = -1L
@@ -308,6 +322,7 @@ class GoogleTvSync @Inject constructor(
             // Chaîne ordinaire : l'utilisateur l'ajoute à l'accueil depuis « Personnaliser les chaînes » (seule la
             // première chaîne de l'application est affichée d'office par le système).
             channelId = publishChannel(helper, channel)
+            if (channelId < 0) { report("news:publish", "news channel publish refused by system (id=$channelId)", warn = true); return@withLock }
             prefs.edit().putLong(K_NEWS_CHANNEL, channelId).putString(K_NEWS_NAME, name).remove(K_NEWS_SIGNATURE).apply()
             report("news:created", "news channel created id=$channelId default=${prefs.getBoolean(K_DEFAULT_DONE, false)} items=${selected.size}")
         } else if (prefs.getString(K_NEWS_NAME, null) != name) {

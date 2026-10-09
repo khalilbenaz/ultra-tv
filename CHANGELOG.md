@@ -2,6 +2,14 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions suivant `VERSION`.
 
+## [1.2.56] — 2026-10-09 (Android TV)
+
+### Corrigé
+- Google TV : les chaînes « Favoris » et « Nouveautés » n'étaient jamais créées (relevé par le journal de diagnostic
+  de la 1.2.55). La vérification « la chaîne existe-t-elle ? » interrogeait le système avec l'identifiant -1 (erreur
+  « Unknown URI » sur Xiaomi) ou lisait une fiche de chaîne incomplète (plantage sur Google TV). Vérification
+  remplacée par une requête directe protégée ; un refus de création n'est plus enregistré comme une chaîne.
+
 ## [1.2.55] — 2026-10-08 (Android TV)
 
 ### Corrigé
