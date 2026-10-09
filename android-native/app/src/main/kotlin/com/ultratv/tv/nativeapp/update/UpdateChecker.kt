@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -129,13 +130,49 @@ object UpdateChecker {
         return major * 10_000 + minor * 100 + patch
     }
 
+    /**
+     * Un seul téléchargement à la fois : la mise à jour automatique (30 s après le lancement) et le bouton « Mettre à
+     * jour » partageaient le même fichier ; le second appel vidait le dossier pendant que le premier écrivait (APK
+     * tronqué → « empreinte différente », « package non valide »). Le second appel attend le premier et réutilise
+     * l'APK déjà vérifié.
+     */
+    private val single = kotlinx.coroutines.sync.Mutex()
+
     suspend fun downloadAndInstall(ctx: Context, info: UpdateInfo, onProgress: (Float) -> Unit = {}) {
-        withContext(Dispatchers.IO) {
-            val apk = downloadApk(ctx, info, onProgress)
-            verifyChecksum(apk, info)
-            if (!sameSigner(ctx, apk)) throw SignatureMismatchException()
-            installApk(ctx, apk)
+        single.withLock {
+            withContext(Dispatchers.IO) {
+                val apk = fetchVerified(ctx, info, onProgress)
+                if (!sameSigner(ctx, apk)) throw SignatureMismatchException()
+                installApk(ctx, apk)
+            }
         }
+    }
+
+    /** APK vérifié de cette version : réutilisé s'il l'est déjà, sinon téléchargé (une seconde tentative si corrompu). */
+    internal fun fetchVerified(ctx: Context, info: UpdateInfo, onProgress: (Float) -> Unit = {}): File =
+        verifiedApk(ctx, info) ?: runCatching { downloadAndVerify(ctx, info, onProgress) }
+            .getOrElse { first ->
+                RemoteLog.warn(TAG, "retrying download for ${info.tag}: ${first.message}")
+                downloadAndVerify(ctx, info, onProgress)
+            }
+
+    /** Pour les tests : même verrou que downloadAndInstall, sans signature ni installation. */
+    internal suspend fun fetchVerifiedLocked(ctx: Context, info: UpdateInfo): File =
+        single.withLock { withContext(Dispatchers.IO) { fetchVerified(ctx, info) } }
+
+    private fun downloadAndVerify(ctx: Context, info: UpdateInfo, onProgress: (Float) -> Unit): File {
+        val apk = downloadApk(ctx, info, onProgress)
+        verifyChecksum(apk, info)
+        File(apk.path + ".ok").writeText(sha256Hex(apk))
+        return apk
+    }
+
+    /** APK de cette version déjà téléchargé ET vérifié (marqueur `.ok` = empreinte au moment de la vérification). */
+    private fun verifiedApk(ctx: Context, info: UpdateInfo): File? {
+        val apk = File(File(ctx.filesDir, "updates"), "ultra-tv-${info.versionName}.apk")
+        val ok = File(apk.path + ".ok")
+        if (!apk.isFile || !ok.isFile) return null
+        return apk.takeIf { runCatching { ok.readText().trim() == sha256Hex(it) }.getOrDefault(false) }
     }
 
     /**
@@ -196,16 +233,20 @@ object UpdateChecker {
 
     private fun downloadApk(ctx: Context, info: UpdateInfo, onProgress: (Float) -> Unit): File {
         val dir = File(ctx.filesDir, "updates").apply { mkdirs() }
-        // Clean previous APKs so we don't fill the disk on repeat updates.
-        dir.listFiles()?.forEach { it.delete() }
         val out = File(dir, "ultra-tv-${info.versionName}.apk")
+        // Anciennes versions supprimées (pas celle-ci : un autre appel peut l'avoir déjà vérifiée).
+        dir.listFiles()?.filter { !it.name.startsWith(out.name) }?.forEach { it.delete() }
+        // Écriture dans un fichier temporaire, renommé seulement une fois complet : jamais d'APK à moitié écrit.
+        val part = File(dir, out.name + ".part")
+        part.delete(); out.delete(); File(out.path + ".ok").delete()
         val req = Request.Builder().url(info.apkUrl).build()
         http.newCall(req).execute().use { resp ->
             check(resp.isSuccessful) { "download failed ${resp.code}" }
             val body = resp.body ?: error("empty body")
-            val total = body.contentLength().coerceAtLeast(1L)
+            val expectedLength = body.contentLength()
+            val total = expectedLength.coerceAtLeast(1L)
             body.byteStream().use { input ->
-                out.outputStream().use { output ->
+                part.outputStream().use { output ->
                     val buf = ByteArray(64 * 1024)
                     var sent = 0L
                     while (true) {
@@ -217,7 +258,12 @@ object UpdateChecker {
                     }
                 }
             }
+            if (expectedLength > 0 && part.length() != expectedLength) {
+                part.delete()
+                error("download incomplete: ${part.length()}/$expectedLength bytes")
+            }
         }
+        check(part.renameTo(out)) { "cannot finalize ${out.name}" }
         RemoteLog.info(TAG, "downloaded ${out.length()} bytes for ${info.tag}")
         return out
     }

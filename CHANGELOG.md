@@ -2,6 +2,15 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions suivant `VERSION`.
 
+## [1.2.58] — 2026-10-09 (Android TV)
+
+### Corrigé
+- Mise à jour : « La mise à jour n'a pas pu être installée » / « package non valide ». La mise à jour automatique
+  (30 s après le lancement) et le bouton « Mettre à jour » téléchargeaient en même temps dans le même fichier ; le
+  second vidait le dossier pendant que le premier écrivait (APK tronqué, empreinte différente). Un seul téléchargement
+  à la fois désormais, écrit dans un fichier temporaire, contrôlé en longueur, recommencé une fois s'il est corrompu ;
+  un APK déjà vérifié est réutilisé.
+
 ## [1.2.57] — 2026-10-09 (Android TV) · [Bureau 1.2.34]
 
 ### Corrigé
