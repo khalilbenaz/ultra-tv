@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions suivant `VERSION`.
 
+## [1.2.60] — 2026-10-12 (Android)
+
+### Corrections
+- Smartphone, premier lancement : après l'appairage « Depuis le cloud », l'assistant passe aux langues puis à la préparation du catalogue au lieu de revenir au choix de la source (la synchro partait en arrière-plan, écran resté sur Xtream / M3U / Cloud).
+
 ## [1.2.59] — 2026-10-12 (Android TV)
 
 ### Corrections

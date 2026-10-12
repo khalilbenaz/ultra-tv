@@ -416,6 +416,14 @@ private fun SourceStep(W: WizardStrings, onAdded: () -> Unit, onXtreamAdded: (Lo
         }
     }
 
+    // Même départ sur TV et smartphone : l'assistant suit l'appairage et enchaîne sur les langues puis la synchro
+    // (avant, la carte du smartphone lançait l'appairage seule : synchro en arrière-plan, écran resté sur le choix).
+    val startCloud = {
+        cloudStarted = true
+        com.ultratv.tv.nativeapp.data.config.CloudOnboarding.deferXtreamSync = true
+        settingsVm.startPairing()
+    }
+
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
@@ -442,7 +450,7 @@ private fun SourceStep(W: WizardStrings, onAdded: () -> Unit, onXtreamAdded: (Lo
             TouchSourceCard(Icons.Monitor, W.cardXtream, W.cardXtreamDesc) { form = Form.Xtream }
             TouchSourceCard(Icons.Link, W.cardM3uUrl, W.cardM3uUrlDesc) { form = Form.M3uUrl }
             TouchSourceCard(Icons.File, W.cardM3uFile, W.cardM3uFileDesc) { pickFile.launch(arrayOf("*/*")) }
-            TouchSourceCard(Icons.Globe, com.ultratv.tv.nativeapp.ui.mobile.LocalMobileStrings.current.fromCloud, com.ultratv.tv.nativeapp.i18n.LocalDs.current.cloudSyncHint) { settingsVm.startPairing() }
+            TouchSourceCard(Icons.Globe, com.ultratv.tv.nativeapp.ui.mobile.LocalMobileStrings.current.fromCloud, com.ultratv.tv.nativeapp.i18n.LocalDs.current.cloudSyncHint) { startCloud() }
             TouchCta(W.later, false, onLater)
         }
     } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -458,7 +466,7 @@ private fun SourceStep(W: WizardStrings, onAdded: () -> Unit, onXtreamAdded: (Lo
             SourceCard(Modifier.weight(1f), Icons.Monitor, W.cardXtream, W.cardXtreamDesc, first = true) { form = Form.Xtream }
             SourceCard(Modifier.weight(1f), Icons.Link, W.cardM3uUrl, W.cardM3uUrlDesc) { form = Form.M3uUrl }
             SourceCard(Modifier.weight(1f), Icons.File, W.cardM3uFile, W.cardM3uFileDesc) { pickFile.launch(arrayOf("*/*")) }
-            SourceCard(Modifier.weight(1f), Icons.Link, com.ultratv.tv.nativeapp.i18n.LocalDs.current.cardCloud, com.ultratv.tv.nativeapp.i18n.LocalDs.current.cardCloudDesc) { cloudStarted = true; com.ultratv.tv.nativeapp.data.config.CloudOnboarding.deferXtreamSync = true; settingsVm.startPairing() }
+            SourceCard(Modifier.weight(1f), Icons.Link, com.ultratv.tv.nativeapp.i18n.LocalDs.current.cardCloud, com.ultratv.tv.nativeapp.i18n.LocalDs.current.cardCloudDesc) { startCloud() }
         }
         Spacer(Modifier.height(40.design))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
