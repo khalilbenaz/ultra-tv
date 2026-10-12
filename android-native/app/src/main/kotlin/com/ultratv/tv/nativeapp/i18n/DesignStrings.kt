@@ -361,6 +361,13 @@ class DesignStrings(val lang: AppLang) {
     val none get() = t("None", "Aucun", "Ninguno", "بدون")
     val autoNext get() = t("Next episode automatically", "Épisode suivant automatique", "Siguiente episodio automático", "الحلقة التالية تلقائيًا")
     val resumePlayback get() = t("Resume playback", "Reprendre la lecture", "Reanudar reproducción", "استئناف التشغيل")
+    val compatVideo get() = t("Compatibility video rendering", "Rendu vidéo de compatibilité", "Renderizado de vídeo compatible", "عرض الفيديو المتوافق")
+    val compatVideoHint get() = t(
+        "Turn on if you hear the sound but see no picture (NVIDIA Shield and some boxes). On by default on NVIDIA.",
+        "À activer si vous entendez le son sans voir l’image (NVIDIA Shield et certaines box). Activé d’office sur NVIDIA.",
+        "Actívalo si oyes el sonido pero no ves la imagen (NVIDIA Shield y algunos equipos). Activado por defecto en NVIDIA.",
+        "فعّله إذا كنت تسمع الصوت دون رؤية الصورة (NVIDIA Shield وبعض الأجهزة). مفعّل افتراضيًا على NVIDIA.",
+    )
     val autoFps get() = t("Match screen refresh rate", "Fréquence d’écran adaptée à la vidéo", "Adaptar la frecuencia de pantalla", "مطابقة معدل تحديث الشاشة")
     val on get() = t("On", "Activé", "Activado", "مفعّل")
     val offState get() = t("Off", "Désactivé", "Desactivado", "معطّل")

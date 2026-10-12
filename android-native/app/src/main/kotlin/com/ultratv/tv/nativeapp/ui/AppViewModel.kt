@@ -48,6 +48,7 @@ class AppViewModel @Inject constructor(
     fun setTelemetry(on: Boolean) = viewModelScope.launch { store.setTelemetry(on) }
     fun setBufferSeconds(v: Int) = viewModelScope.launch { store.setBufferSeconds(v) }
     fun setAutoFrameRate(v: Boolean) = viewModelScope.launch { store.setAutoFrameRate(v) }
+    fun setVideoSurface(v: String) = viewModelScope.launch { store.setVideoSurface(v) }
     fun setPreferSoftwareDecoder(v: Boolean) = viewModelScope.launch { store.setPreferSoftwareDecoder(v) }
     fun setEpgTimeOffsetMin(v: Int) = viewModelScope.launch { store.setEpgTimeOffsetMin(v) }
     fun setLocalLogosFolderUri(uri: String) = viewModelScope.launch { store.setLocalLogosFolderUri(uri) }

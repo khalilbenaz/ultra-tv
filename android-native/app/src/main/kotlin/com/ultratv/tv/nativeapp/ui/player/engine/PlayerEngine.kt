@@ -62,7 +62,19 @@ data class EngineConfig(
     val textOff: Boolean = false,
     /** Langue de l'interface (ISO 639-1) : noms de langues des pistes affichés dans cette langue. */
     val uiLanguage: String = java.util.Locale.getDefault().language,
+    /** Vidéo dans une TextureView (intégrée à l'interface) au lieu d'une SurfaceView (couche séparée). */
+    val textureView: Boolean = false,
 )
+
+/**
+ * Rendu vidéo effectif. Sur NVIDIA Shield, la couche SurfaceView de la vidéo peut rester invisible sous l'interface
+ * (son sans image, issue #7) alors que la même source passe ailleurs : TextureView par défaut sur ces appareils.
+ */
+fun useTextureView(pref: String, manufacturer: String = android.os.Build.MANUFACTURER ?: ""): Boolean = when (pref) {
+    "texture" -> true
+    "surface" -> false
+    else -> manufacturer.equals("NVIDIA", ignoreCase = true)
+}
 
 /**
  * Interface commune des moteurs (Media3 / LibVLC). UN SEUL moteur est instancié à la fois : le fournisseur

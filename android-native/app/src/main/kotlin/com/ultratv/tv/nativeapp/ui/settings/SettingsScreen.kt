@@ -497,6 +497,9 @@ private fun PlaybackPane(panes: SettingsPanesViewModel, app: AppViewModel) {
         SwitchPrefRow(D.autoNext, p.autoPlayNextEpisode) { app.setAutoPlayNext(it) }
         SwitchPrefRow(D.resumePlayback, p.resumePlayback) { app.setResumePlayback(it) }
         SwitchPrefRow(D.autoFps, p.autoFrameRate) { app.setAutoFrameRate(it) }
+        SwitchPrefRow(D.compatVideo, com.ultratv.tv.nativeapp.ui.player.engine.useTextureView(p.videoSurface), hint = D.compatVideoHint) {
+            app.setVideoSurface(if (it) "texture" else "surface")
+        }
     }
     when (choice) {
         "engine" -> ChoiceDialog(D.playerRow, listOf("auto" to D.auto, "exo" to D.engineExo, "vlc" to D.engineVlc), p.playerEngine, { panes.setPlayerEngine(it); choice = "" }, { choice = "" })

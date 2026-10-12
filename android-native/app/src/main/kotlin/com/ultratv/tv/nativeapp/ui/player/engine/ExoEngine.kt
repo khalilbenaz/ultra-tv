@@ -33,7 +33,11 @@ class ExoEngine(private val ctx: Context, override val config: EngineConfig) : P
     override val events: Flow<EngineEvent> = _events
 
     private val player: ExoPlayer
-    private val playerView: PlayerView = PlayerView(ctx).apply { useController = false; setKeepContentOnPlayerReset(false) }
+    // TextureView : le type de surface d'une PlayerView ne se règle qu'à l'inflation (attribut app:surface_type).
+    private val playerView: PlayerView = (
+        if (config.textureView) android.view.LayoutInflater.from(ctx).inflate(com.ultratv.tv.nativeapp.R.layout.exo_texture_player_view, null) as PlayerView
+        else PlayerView(ctx)
+    ).apply { useController = false; setKeepContentOnPlayerReset(false) }
     override val view: View get() = playerView
 
     private val hardwareFirst = MediaCodecSelector { mime, secure, tunneling ->

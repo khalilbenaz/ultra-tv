@@ -49,6 +49,7 @@ class PlaybackSession(
     private val isLive: Boolean,
     private val autoFrameRate: Boolean,
     private val userAgent: String,
+    private val textureView: Boolean = false,
     /** Style des sous-titres et langues préférées au moment du lancement du moteur. */
     private val subtitles: () -> com.ultratv.tv.nativeapp.data.prefs.SubtitleSettings = { com.ultratv.tv.nativeapp.data.prefs.SubtitleSettings() },
     /** Langue de l'interface (ISO 639-1) : langue audio par défaut quand aucune préférence n'est réglée. */
@@ -156,7 +157,7 @@ class PlaybackSession(
         val tc = com.ultratv.tv.nativeapp.data.subtitles.TrackChoice
         val audioPref = tc.effectivePreferred(sub.languages.audio, key?.let { memory.audioLang(it) }, ui)
         val textPref = if (sub.autoOn) tc.effectivePreferred(sub.languages.text, null, ui) else emptyList()
-        val cfg = EngineConfig(c.decoder, buffer, isLive, autoFrameRate, userAgent, sub.style, audioPref, textPref, textOff = !sub.autoOn, uiLanguage = ui)
+        val cfg = EngineConfig(c.decoder, buffer, isLive, autoFrameRate, userAgent, sub.style, audioPref, textPref, textOff = !sub.autoOn, uiLanguage = ui, textureView = textureView)
         val e = runCatching { engineFactory(c.engine, cfg) }.getOrElse { onError(PlayErrorKind.UNKNOWN); return }
         engine = e
         container.removeAllViews(); container.addView(e.view, FrameLayout.LayoutParams(-1, -1))

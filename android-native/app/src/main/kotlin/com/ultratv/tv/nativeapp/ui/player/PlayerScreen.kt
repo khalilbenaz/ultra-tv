@@ -382,6 +382,7 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, onHome: (() -> 
             ctx = context, scope = scope, container = container,
             settings = { vm.resolved(latestPrefs) }, memory = vm.memory, network = vm.network,
             isLive = isLive, autoFrameRate = p.autoFrameRate, userAgent = "UltraTV/1.0 (Android TV)",
+            textureView = com.ultratv.tv.nativeapp.ui.player.engine.useTextureView(p.videoSurface),
             subtitles = { subVm.current },
             uiLanguage = { if (latestPrefs.language == "system") java.util.Locale.getDefault().language else latestPrefs.language },
         )

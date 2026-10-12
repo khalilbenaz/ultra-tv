@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions suivant `VERSION`.
 
+## [1.2.59] — 2026-10-12 (Android TV)
+
+### Corrections
+- NVIDIA Shield : son sans image avec les lecteurs intégrés (ExoPlayer et VLC) — la vidéo est désormais rendue dans une TextureView sur les appareils NVIDIA (issue #7). Nouveau réglage « Rendu vidéo de compatibilité » (Réglages › Lecture) pour l'activer sur d'autres box ou le désactiver.
+
 ## [1.2.58] — 2026-10-09 (Android TV)
 
 ### Corrigé

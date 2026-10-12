@@ -49,7 +49,7 @@ class VlcEngine(private val ctx: Context, override val config: EngineConfig) : P
         opts += com.ultratv.tv.nativeapp.data.subtitles.SubtitleStyleMapper.toVlcOptions(config.subtitleStyle)
         libVlc = LibVLC(ctx, opts)
         mp = MediaPlayer(libVlc)
-        mp.attachViews(layout, null, false, false)
+        mp.attachViews(layout, null, false, config.textureView)
         mp.setEventListener { e ->
             when (e.type) {
                 MediaPlayer.Event.Buffering -> _events.tryEmit(if (e.buffering >= 100f) EngineEvent.Ready else EngineEvent.Buffering)
