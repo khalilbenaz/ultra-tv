@@ -497,7 +497,7 @@ private fun PlaybackPane(panes: SettingsPanesViewModel, app: AppViewModel) {
         SwitchPrefRow(D.autoNext, p.autoPlayNextEpisode) { app.setAutoPlayNext(it) }
         SwitchPrefRow(D.resumePlayback, p.resumePlayback) { app.setResumePlayback(it) }
         SwitchPrefRow(D.autoFps, p.autoFrameRate) { app.setAutoFrameRate(it) }
-        SwitchPrefRow(D.compatVideo, com.ultratv.tv.nativeapp.ui.player.engine.useTextureView(p.videoSurface), hint = D.compatVideoHint) {
+        SwitchPrefRow(D.compatVideo, com.ultratv.tv.nativeapp.ui.player.engine.useTextureView(p.videoSurface, com.ultratv.tv.nativeapp.ui.mobile.LocalTouch.current), hint = D.compatVideoHint) {
             app.setVideoSurface(if (it) "texture" else "surface")
         }
     }

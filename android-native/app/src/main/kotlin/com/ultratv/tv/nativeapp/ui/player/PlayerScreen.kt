@@ -376,13 +376,14 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, onHome: (() -> 
 
     // [B2·sous-titres] style, langues préférées (DataStore) et recherche en ligne.
     val subVm: com.ultratv.tv.nativeapp.ui.player.subtitles.SubtitleViewModel = hiltViewModel()
+    val touchUi = com.ultratv.tv.nativeapp.ui.mobile.LocalTouch.current
     val container = remember { FrameLayout(context).apply { setBackgroundColor(android.graphics.Color.BLACK) } }
     val session = remember {
         PlaybackSession(
             ctx = context, scope = scope, container = container,
             settings = { vm.resolved(latestPrefs) }, memory = vm.memory, network = vm.network,
             isLive = isLive, autoFrameRate = p.autoFrameRate, userAgent = "UltraTV/1.0 (Android TV)",
-            textureView = com.ultratv.tv.nativeapp.ui.player.engine.useTextureView(p.videoSurface),
+            textureView = com.ultratv.tv.nativeapp.ui.player.engine.useTextureView(p.videoSurface, touchUi),
             subtitles = { subVm.current },
             uiLanguage = { if (latestPrefs.language == "system") java.util.Locale.getDefault().language else latestPrefs.language },
         )

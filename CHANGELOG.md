@@ -2,6 +2,14 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions suivant `VERSION`.
 
+## [1.2.61] — 2026-10-12 (Android)
+
+### Corrections
+- Son sans image (smartphone Samsung Galaxy A30s, NVIDIA Shield…) :
+  - rendu vidéo de compatibilité (TextureView) activé d'office sur smartphone et tablette, en plus de NVIDIA ;
+  - l'image est réellement vérifiée après le démarrage : si elle reste entièrement noire, le lecteur passe tout seul au décodage suivant (logiciel, puis VLC), comme pour une absence d'image ;
+  - le conteneur vidéo, masqué en quittant le lecteur, est toujours réaffiché au lancement suivant.
+
 ## [1.2.60] — 2026-10-12 (Android)
 
 ### Corrections

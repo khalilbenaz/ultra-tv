@@ -67,13 +67,14 @@ data class EngineConfig(
 )
 
 /**
- * Rendu vidéo effectif. Sur NVIDIA Shield, la couche SurfaceView de la vidéo peut rester invisible sous l'interface
- * (son sans image, issue #7) alors que la même source passe ailleurs : TextureView par défaut sur ces appareils.
+ * Rendu vidéo effectif. La couche SurfaceView de la vidéo peut rester invisible sous l'interface (son sans image) :
+ * NVIDIA Shield (issue #7) et certains smartphones (Samsung Galaxy A30s). TextureView par défaut sur NVIDIA et sur
+ * smartphone / tablette ([touch]) ; SurfaceView sur les autres box TV (plus économe en 4K).
  */
-fun useTextureView(pref: String, manufacturer: String = android.os.Build.MANUFACTURER ?: ""): Boolean = when (pref) {
+fun useTextureView(pref: String, touch: Boolean, manufacturer: String = android.os.Build.MANUFACTURER ?: ""): Boolean = when (pref) {
     "texture" -> true
     "surface" -> false
-    else -> manufacturer.equals("NVIDIA", ignoreCase = true)
+    else -> touch || manufacturer.equals("NVIDIA", ignoreCase = true)
 }
 
 /**

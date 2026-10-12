@@ -73,6 +73,8 @@ class PlaybackSession(
     private var presetOverride: BufferPreset? = null
     private var eventsJob: Job? = null
     private var watchdog: Job? = null
+    /** Contrôle de l'image réelle après la première image (décodeur qui ne rend que du noir). */
+    private var blackJob: Job? = null
     private var rememberJob: Job? = null
     private val adapter = PlaybackAdapter()
     private var firstFrame = false
@@ -109,7 +111,7 @@ class PlaybackSession(
         // détruire et d'en recréer un (lecteur, vue, décodeurs : plusieurs centaines de ms sur une box modeste).
         // Réglages de sous-titres changés depuis la création du moteur : on le recrée (ils sont fixés à sa création).
         if (isLive && e != null && e.reusable && next == combo && bufferFor(s) == launchedBuffer && subtitles() == launchedSubs && _state.value.phase != Phase.ERROR) {
-            watchdog?.cancel(); rememberJob?.cancel()
+            watchdog?.cancel(); blackJob?.cancel(); rememberJob?.cancel()
             tried = mutableSetOf(combo); firstFrame = false; launchedAtNs = System.nanoTime()
             _state.value = SessionState(Phase.LOADING, null, combo, presetOverride ?: s.bufferPreset, false)
             e.load(url, resumeMs)
@@ -138,7 +140,7 @@ class PlaybackSession(
     fun setBufferPreset(p: BufferPreset) { presetOverride = p; key?.let { memory.remember(it, null, p) }; launch(combo) }
 
     private fun launch(c: Combo) {
-        eventsJob?.cancel(); watchdog?.cancel(); rememberJob?.cancel()
+        eventsJob?.cancel(); watchdog?.cancel(); blackJob?.cancel(); rememberJob?.cancel()
         // Nouveau moteur : une reconnexion ou une nouvelle tentative encore en attente rechargerait un flux qui joue.
         reconnectJob?.cancel(); stallJob?.cancel(); stableJob?.cancel(); errorJob?.cancel()
         releaseEngine()
@@ -161,6 +163,8 @@ class PlaybackSession(
         val e = runCatching { engineFactory(c.engine, cfg) }.getOrElse { onError(PlayErrorKind.UNKNOWN); return }
         engine = e
         container.removeAllViews(); container.addView(e.view, FrameLayout.LayoutParams(-1, -1))
+        // Masqué en quittant le lecteur (couche vidéo retirée tout de suite) : toujours réaffiché au lancement suivant.
+        container.visibility = android.view.View.VISIBLE
         e.limitQuality(s.maxVideoHeight, PlaybackAdapter.scaleBitrate(s.maxVideoBitrateBps, adapter.level))
         eventsJob = scope.launch { e.events.collect { onEvent(it, e) } }
         e.load(url, resumeMs)
@@ -189,13 +193,14 @@ class PlaybackSession(
             } else Unit
             EngineEvent.Ready -> { stallJob?.cancel(); if (!firstFrame && watchdog?.isActive != true) armPictureWatchdog(e) }
             EngineEvent.FirstFrame -> {
-                firstFrame = true; watchdog?.cancel(); stallJob?.cancel()
+                firstFrame = true; watchdog?.cancel(); blackJob?.cancel(); stallJob?.cancel()
                 everPlayed = true
                 // 30 s de lecture stable : le compteur de reconnexions repart de zéro.
                 stableJob?.cancel(); stableJob = scope.launch { delay(30_000); reconnects = 0 }
                 // Mesure (jamais d'URL) : moteur, décodage et délai jusqu'à la première image.
                 android.util.Log.i("UltraPlay", "firstFrame engine=${combo.engine} decoder=${combo.decoder} ms=${(System.nanoTime() - launchedAtNs) / 1_000_000}")
                 _state.value = _state.value.copy(phase = Phase.PLAYING, error = null, hasPicture = true)
+                armBlackPictureCheck(e)
                 // La combinaison est retenue pour la chaîne si elle a demandé un repli ou un choix manuel et tient 5 s.
                 rememberJob?.cancel()
                 rememberJob = scope.launch { delay(5_000); if (tried.size > 1 || manualSwitch) key?.let { memory.remember(it, combo, null) } }
@@ -212,6 +217,26 @@ class PlaybackSession(
         watchdog = scope.launch {
             delay(8_000)
             if (!firstFrame && e.hasVideo) onError(PlayErrorKind.NO_PICTURE)
+        }
+    }
+
+    /**
+     * Le décodeur dit avoir rendu une image, mais l'écran peut rester noir (HEVC 10 bits sur certains Exynos, son seul) :
+     * trois vignettes entièrement noires sur ~6 s au démarrage → même traitement que « aucune image » (décodeur suivant).
+     * Une copie impossible (surface pas prête) ne conclut rien.
+     */
+    private fun armBlackPictureCheck(e: PlayerEngine) {
+        blackJob = scope.launch {
+            delay(3_000)
+            repeat(3) { i ->
+                val px = FrameProbe.sample(e.view) ?: return@launch
+                if (!FrameProbe.isBlack(px)) return@launch
+                if (i < 2) delay(1_500)
+            }
+            if (engine === e && e.hasVideo) {
+                android.util.Log.i("UltraPlay", "black picture engine=${combo.engine} decoder=${combo.decoder}")
+                onError(PlayErrorKind.NO_PICTURE)
+            }
         }
     }
 
@@ -264,7 +289,7 @@ class PlaybackSession(
         _notices.tryEmit(Notice.RETRYING)
         reconnectJob = scope.launch {
             delay(wait)
-            firstFrame = false; launchedAtNs = System.nanoTime(); watchdog?.cancel()
+            firstFrame = false; launchedAtNs = System.nanoTime(); watchdog?.cancel(); blackJob?.cancel()
             val e = engine
             if (e != null && e.reusable) e.load(url, 0) else launch(combo)
         }
@@ -278,7 +303,7 @@ class PlaybackSession(
     }
 
     fun release() {
-        eventsJob?.cancel(); watchdog?.cancel(); rememberJob?.cancel(); adaptJob?.cancel()
+        eventsJob?.cancel(); watchdog?.cancel(); blackJob?.cancel(); rememberJob?.cancel(); adaptJob?.cancel()
         reconnectJob?.cancel(); stallJob?.cancel(); stableJob?.cancel(); errorJob?.cancel()
         releaseEngine()
     }
